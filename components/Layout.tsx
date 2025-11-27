@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Menu, 
   X, 
@@ -14,19 +14,27 @@ interface LayoutProps {
 }
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const navigate = useNavigate();
   const location = useLocation();
+
+  useEffect(() => {
+    // Initial check for screen size to decide sidebar state
+    if (window.innerWidth < 1024) {
+      setSidebarOpen(false);
+    }
+  }, []);
 
   const navItems = [
     { label: 'Inicio', icon: <LayoutDashboard size={20} />, path: '/' },
     { label: 'Datos Maestros', icon: <Database size={20} />, path: '/master-data' },
-    // Other modules are now accessed via the Dashboard cards only
   ];
 
   const handleNav = (path: string) => {
     navigate(path);
-    setSidebarOpen(false);
+    if (window.innerWidth < 1024) {
+      setSidebarOpen(false);
+    }
   };
 
   return (
@@ -41,69 +49,72 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
       {/* Sidebar */}
       <aside className={`
-        fixed inset-y-0 left-0 z-50 w-64 bg-brand-800 text-white transform transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0
-        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+        fixed inset-y-0 left-0 z-50 bg-brand-800 text-white transition-all duration-300 ease-in-out overflow-hidden
+        lg:relative
+        ${sidebarOpen ? 'w-64 translate-x-0' : '-translate-x-full w-64 lg:w-0 lg:translate-x-0'}
       `}>
-        <div className="flex items-center justify-between p-4 border-b border-brand-700">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center">
-              <span className="font-bold text-brand-800">H&S</span>
+        <div className="w-64 h-full flex flex-col">
+          <div className="flex items-center justify-between p-4 border-b border-brand-700 min-h-[64px]">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center shrink-0">
+                <span className="font-bold text-brand-800">H&S</span>
+              </div>
+              <span className="font-bold text-xl tracking-tight whitespace-nowrap">Management</span>
             </div>
-            <span className="font-bold text-xl tracking-tight">Management</span>
-          </div>
-          <button onClick={() => setSidebarOpen(false)} className="lg:hidden text-slate-300 hover:text-white">
-            <X size={24} />
-          </button>
-        </div>
-
-        <nav className="p-4 space-y-1">
-          {navItems.map((item) => (
-            <button
-              key={item.path}
-              onClick={() => handleNav(item.path)}
-              className={`flex items-center gap-3 w-full p-3 rounded-lg transition-colors ${
-                location.pathname === item.path 
-                  ? 'bg-brand-700 text-white shadow-lg border-l-4 border-white' 
-                  : 'text-slate-300 hover:bg-brand-700/50 hover:text-white'
-              }`}
-            >
-              {item.icon}
-              <span className="font-medium">{item.label}</span>
+            <button onClick={() => setSidebarOpen(false)} className="lg:hidden text-slate-300 hover:text-white">
+              <X size={24} />
             </button>
-          ))}
-        </nav>
-
-        <div className="absolute bottom-0 w-full p-4 border-t border-brand-700 bg-brand-900">
-          <div className="flex items-center gap-3 mb-4">
-            <img 
-              src="https://picsum.photos/40/40" 
-              alt="User" 
-              className="w-10 h-10 rounded-full border-2 border-slate-400"
-            />
-            <div>
-              <p className="text-sm font-semibold">Carlos Mendez</p>
-              <p className="text-xs text-slate-400">Supervisor H&S</p>
-            </div>
           </div>
-          <button className="flex items-center gap-2 text-slate-400 hover:text-white text-sm w-full">
-            <LogOut size={16} /> Cerrar Sesión
-          </button>
+
+          <nav className="p-4 space-y-1 flex-1 overflow-y-auto">
+            {navItems.map((item) => (
+              <button
+                key={item.path}
+                onClick={() => handleNav(item.path)}
+                className={`flex items-center gap-3 w-full p-3 rounded-lg transition-colors whitespace-nowrap ${
+                  location.pathname === item.path 
+                    ? 'bg-brand-700 text-white shadow-lg border-l-4 border-white' 
+                    : 'text-slate-300 hover:bg-brand-700/50 hover:text-white'
+                }`}
+              >
+                {item.icon}
+                <span className="font-medium">{item.label}</span>
+              </button>
+            ))}
+          </nav>
+
+          <div className="p-4 border-t border-brand-700 bg-brand-900 shrink-0">
+            <div className="flex items-center gap-3 mb-4">
+              <img 
+                src="https://picsum.photos/40/40" 
+                alt="User" 
+                className="w-10 h-10 rounded-full border-2 border-slate-400 shrink-0"
+              />
+              <div className="overflow-hidden">
+                <p className="text-sm font-semibold truncate">Carlos Mendez</p>
+                <p className="text-xs text-slate-400 truncate">Supervisor H&S</p>
+              </div>
+            </div>
+            <button className="flex items-center gap-2 text-slate-400 hover:text-white text-sm w-full whitespace-nowrap">
+              <LogOut size={16} /> Cerrar Sesión
+            </button>
+          </div>
         </div>
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col h-full overflow-hidden">
+      <main className="flex-1 flex flex-col h-full overflow-hidden w-full">
         {/* Header */}
-        <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 lg:px-8 shadow-sm z-10">
-          <button 
-            onClick={() => setSidebarOpen(true)}
-            className="lg:hidden text-slate-600 hover:text-slate-900"
-          >
-            <Menu size={24} />
-          </button>
-          
-          <div className="flex-1 lg:flex-none flex justify-center lg:justify-start">
-             <h1 className="text-lg font-semibold text-brand-800 lg:hidden">H&S Management</h1>
+        <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 lg:px-8 shadow-sm z-10 shrink-0">
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className="text-slate-600 hover:text-slate-900"
+            >
+              <Menu size={24} />
+            </button>
+            
+            <h1 className="text-lg font-semibold text-brand-800 lg:hidden">H&S Management</h1>
           </div>
 
           <div className="flex items-center gap-4">

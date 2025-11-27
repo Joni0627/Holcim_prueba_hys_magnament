@@ -4,7 +4,6 @@ import {
   FileText, 
   Construction, 
   GraduationCap, 
-  Database, 
   QrCode, 
   ArrowRight,
   ShieldAlert
@@ -59,16 +58,6 @@ const appModules = [
     colorClass: 'hover:border-emerald-500 hover:shadow-emerald-100',
     iconColorClass: 'bg-emerald-100 text-emerald-700',
     roles: ['All']
-  },
-  {
-    id: 'master-data',
-    title: 'Datos Maestros',
-    description: 'Administración de usuarios, puestos y áreas.',
-    icon: Database,
-    path: '/master-data',
-    colorClass: 'hover:border-slate-500 hover:shadow-slate-100',
-    iconColorClass: 'bg-slate-100 text-slate-700',
-    roles: ['Admin'] // Example of permission
   }
 ];
 
@@ -144,7 +133,7 @@ const Dashboard = () => {
           <span className="text-sm">Sincronización: Al día</span>
         </div>
         <div className="flex items-center gap-3 text-slate-500">
-           <span className="text-sm">Versión 1.0.2</span>
+           <span className="text-sm">Versión 1.0.3</span>
         </div>
       </div>
     </div>
