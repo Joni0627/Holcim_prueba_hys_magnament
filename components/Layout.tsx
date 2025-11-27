@@ -3,10 +3,6 @@ import {
   Menu, 
   X, 
   LayoutDashboard, 
-  FileText, 
-  Construction, 
-  GraduationCap, 
-  QrCode, 
   LogOut,
   Bell,
   Database
@@ -23,12 +19,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const location = useLocation();
 
   const navItems = [
-    { label: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/' },
+    { label: 'Inicio', icon: <LayoutDashboard size={20} />, path: '/' },
     { label: 'Datos Maestros', icon: <Database size={20} />, path: '/master-data' },
-    { label: 'Manejo del Cambio', icon: <FileText size={20} />, path: '/moc' },
-    { label: 'Insp. Andamios', icon: <Construction size={20} />, path: '/scaffolds' },
-    { label: 'Formación', icon: <GraduationCap size={20} />, path: '/training' },
-    { label: 'Mis Habilitaciones', icon: <QrCode size={20} />, path: '/badge' },
+    // Other modules are now accessed via the Dashboard cards only
   ];
 
   const handleNav = (path: string) => {

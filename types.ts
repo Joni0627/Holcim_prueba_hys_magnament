@@ -1,3 +1,4 @@
+
 export interface Company {
   id: string;
   name: string;
@@ -6,6 +7,25 @@ export interface Company {
 export interface Area {
   id: string;
   name: string;
+}
+
+export interface JobPosition {
+  id: string;
+  name: string;
+}
+
+export interface Vehicle {
+  id: string;
+  plate: string; // Patente
+  brand: string;
+  model: string;
+}
+
+export interface Machine {
+  id: string;
+  serialNumber: string;
+  brand: string;
+  model: string;
 }
 
 export type UserRole = 'Gerencia' | 'Jefatura' | 'Coordinador' | 'Supervisor' | 'Operario' | 'Pasante';
@@ -50,15 +70,56 @@ export interface MOCRecord {
   createdBy: string;
 }
 
-export interface ScaffoldInspection {
-  id: string;
-  scaffoldId: string;
-  type: 'Multidireccional' | 'Tubular' | 'Colgante';
-  inspector: string;
-  date: string;
-  passed: boolean;
-  issues: string[];
+// --- SCAFFOLDS TYPES ---
+
+export enum ScaffoldStatus {
+  ARMADO = 'ARMADO',
+  INSPECCIONADO = 'INSPECCIONADO',
+  A_DESMONTAR = 'A DESMONTAR',
+  DESMONTADO = 'DESMONTADO'
 }
+
+export type ScaffoldType = 'DE ACCESO' | 'TRABAJO';
+
+export interface Scaffold {
+  id: string;
+  // Header Data
+  assemblyDate: string; // Fecha montaje
+  inspectionDate?: string; // Fecha inspección (assigned after check)
+  expiryDate?: string; // Fecha vencimiento (+7 days)
+  requester: string; // Solicitante
+  assemblyCompanyId: string; // Empresa montaje
+  inspectorId: string; // DNI Inspector
+  officialScaffolder: string; // Andamista oficial
+  locationDescription: string;
+  cubicMeters: number;
+  height: number;
+  type: ScaffoldType;
+  coordinates?: { lat: number; lng: number }; // Maps integration
+  
+  status: ScaffoldStatus;
+  
+  // Inspection Result
+  isOperational?: boolean; // Habilitado manual override
+  checklistResponses?: Record<string, ChecklistResponse>; // Keyed by Question ID
+}
+
+export interface ChecklistResponse {
+  questionId: string;
+  status: 'OK' | 'NO_CUMPLE';
+  observation?: string;
+  photoUrl?: string;
+}
+
+export interface ChecklistItemTemplate {
+  id: string;
+  section: 'BASE DEL ANDAMIO' | 'CUERPO DEL ANDAMIO' | 'PLATAFORMA DE TRABAJO';
+  text: string;
+  description?: string; // Help text / Standard criteria
+  allowPhoto: boolean;
+}
+
+// --- TRAINING TYPES ---
 
 export interface TrainingModule {
   id: string;

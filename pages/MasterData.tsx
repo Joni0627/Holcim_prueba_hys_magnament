@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { User, Company, Area, UserRole, UserProfile } from '../types';
-import { Plus, Search, Edit2, Trash2, Users, Building, MapPin, Save, X, Upload } from 'lucide-react';
+import { User, Company, Area, UserRole, UserProfile, JobPosition, Vehicle, Machine } from '../types';
+import { Plus, Search, Edit2, Trash2, Users, Building, MapPin, Save, X, Upload, Briefcase, Truck, Wrench } from 'lucide-react';
 
-const JOB_POSITIONS = [
+const INITIAL_JOB_POSITIONS = [
   "OPERARIO DE PRODUCCION - AFR",
   "OPERARIO DE PRODUCCION - MOLINERO CRUDO - CEMENTO",
   "OPERARIO DE CARGA DE CARGA A GRANEL",
@@ -52,7 +52,7 @@ const ROLES: UserRole[] = ['Gerencia', 'Jefatura', 'Coordinador', 'Supervisor', 
 const PROFILES: UserProfile[] = ['Administrador', 'Usuario', 'Usuario Tercero'];
 
 const MasterData = () => {
-  const [activeTab, setActiveTab] = useState<'users' | 'companies' | 'areas'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'companies' | 'areas' | 'positions' | 'vehicles' | 'machines'>('users');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -66,6 +66,18 @@ const MasterData = () => {
     { id: '2', name: 'Mantenimiento' },
     { id: '3', name: 'Calidad' }
   ]);
+  const [positions, setPositions] = useState<JobPosition[]>(
+    INITIAL_JOB_POSITIONS.map((name, index) => ({ id: index.toString(), name }))
+  );
+  const [vehicles, setVehicles] = useState<Vehicle[]>([
+    { id: '1', plate: 'AB123CD', brand: 'Toyota', model: 'Hilux' },
+    { id: '2', plate: 'AD456EF', brand: 'Ford', model: 'Ranger' }
+  ]);
+  const [machines, setMachines] = useState<Machine[]>([
+    { id: '1', serialNumber: 'SN-998877', brand: 'Caterpillar', model: 'Excavadora 320' },
+    { id: '2', serialNumber: 'SN-112233', brand: 'Komatsu', model: 'PC200' }
+  ]);
+  
   const [users, setUsers] = useState<User[]>([
     {
       id: '20304050',
@@ -81,29 +93,37 @@ const MasterData = () => {
     }
   ]);
 
-  // Form States for User
-  const [formData, setFormData] = useState<Partial<User>>({
-    id: '', firstName: '', lastName: '', emails: [], role: 'Operario', position: JOB_POSITIONS[0], profile: 'Usuario'
+  // Form States
+  const [userForm, setUserForm] = useState<Partial<User>>({
+    id: '', firstName: '', lastName: '', emails: [], role: 'Operario', position: INITIAL_JOB_POSITIONS[0], profile: 'Usuario'
   });
   const [emailInput, setEmailInput] = useState('');
-
-  // Form States for Company/Area
+  
+  // Generic Name form (Company, Area, Position)
   const [simpleName, setSimpleName] = useState('');
 
+  // Asset Form (Vehicle / Machine)
+  const [assetForm, setAssetForm] = useState({
+    identifier: '', // Plate or Serial Number
+    brand: '',
+    model: ''
+  });
+
   const resetForm = () => {
-    setFormData({
-      id: '', firstName: '', lastName: '', emails: [], role: 'Operario', position: JOB_POSITIONS[0], profile: 'Usuario', companyId: '', areaId: '', bossId: ''
+    setUserForm({
+      id: '', firstName: '', lastName: '', emails: [], role: 'Operario', position: positions[0]?.name || '', profile: 'Usuario', companyId: '', areaId: '', bossId: ''
     });
     setSimpleName('');
     setEmailInput('');
+    setAssetForm({ identifier: '', brand: '', model: '' });
     setEditingId(null);
     setIsModalOpen(false);
   };
 
   const handleUserSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const finalEmails = emailInput ? [emailInput, ...(formData.emails || [])] : (formData.emails || []);
-    const newUser = { ...formData, emails: finalEmails } as User;
+    const finalEmails = emailInput ? [emailInput, ...(userForm.emails || [])] : (userForm.emails || []);
+    const newUser = { ...userForm, emails: finalEmails } as User;
 
     if (editingId) {
       setUsers(users.map(u => u.id === editingId ? { ...u, ...newUser } : u));
@@ -117,14 +137,49 @@ const MasterData = () => {
     resetForm();
   };
 
+  const handleAssetSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (activeTab === 'vehicles') {
+      const newItem: Vehicle = { 
+        id: editingId || Date.now().toString(), 
+        plate: assetForm.identifier, 
+        brand: assetForm.brand, 
+        model: assetForm.model 
+      };
+      if (editingId) {
+        setVehicles(vehicles.map(v => v.id === editingId ? newItem : v));
+      } else {
+        setVehicles([...vehicles, newItem]);
+      }
+    } else if (activeTab === 'machines') {
+      const newItem: Machine = { 
+        id: editingId || Date.now().toString(), 
+        serialNumber: assetForm.identifier, 
+        brand: assetForm.brand, 
+        model: assetForm.model 
+      };
+      if (editingId) {
+        setMachines(machines.map(m => m.id === editingId ? newItem : m));
+      } else {
+        setMachines([...machines, newItem]);
+      }
+    }
+    resetForm();
+  };
+
   const handleSimpleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const newItem = { id: editingId || Date.now().toString(), name: simpleName };
+    
     if (activeTab === 'companies') {
-       const newCo = { id: Date.now().toString(), name: simpleName };
-       setCompanies([...companies, newCo]);
-    } else {
-       const newAr = { id: Date.now().toString(), name: simpleName };
-       setAreas([...areas, newAr]);
+       if (editingId) setCompanies(companies.map(c => c.id === editingId ? newItem : c));
+       else setCompanies([...companies, newItem]);
+    } else if (activeTab === 'areas') {
+       if (editingId) setAreas(areas.map(a => a.id === editingId ? newItem : a));
+       else setAreas([...areas, newItem]);
+    } else if (activeTab === 'positions') {
+       if (editingId) setPositions(positions.map(p => p.id === editingId ? newItem : p));
+       else setPositions([newItem, ...positions]);
     }
     resetForm();
   };
@@ -133,8 +188,14 @@ const MasterData = () => {
     setEditingId(item.id);
     if (activeTab === 'users') {
       const u = item as User;
-      setFormData(u);
+      setUserForm(u);
       setEmailInput(u.emails[0] || '');
+    } else if (activeTab === 'vehicles') {
+      const v = item as Vehicle;
+      setAssetForm({ identifier: v.plate, brand: v.brand, model: v.model });
+    } else if (activeTab === 'machines') {
+      const m = item as Machine;
+      setAssetForm({ identifier: m.serialNumber, brand: m.brand, model: m.model });
     } else {
       setSimpleName(item.name);
     }
@@ -146,6 +207,21 @@ const MasterData = () => {
     if (activeTab === 'users') setUsers(users.filter(u => u.id !== id));
     if (activeTab === 'companies') setCompanies(companies.filter(c => c.id !== id));
     if (activeTab === 'areas') setAreas(areas.filter(a => a.id !== id));
+    if (activeTab === 'positions') setPositions(positions.filter(p => p.id !== id));
+    if (activeTab === 'vehicles') setVehicles(vehicles.filter(v => v.id !== id));
+    if (activeTab === 'machines') setMachines(machines.filter(m => m.id !== id));
+  };
+
+  const getActiveTabTitle = () => {
+    switch(activeTab) {
+      case 'users': return 'Usuario';
+      case 'companies': return 'Empresa';
+      case 'areas': return 'Área';
+      case 'positions': return 'Puesto';
+      case 'vehicles': return 'Vehículo';
+      case 'machines': return 'Máquina';
+      default: return 'Registro';
+    }
   };
 
   return (
@@ -153,21 +229,24 @@ const MasterData = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold text-brand-800">Datos Maestros</h2>
-          <p className="text-slate-500">Gestión de usuarios, estructuras y catálogos.</p>
+          <p className="text-slate-500">Gestión de usuarios, estructuras y activos.</p>
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 border-b border-slate-200">
+      <div className="flex gap-2 border-b border-slate-200 overflow-x-auto no-scrollbar">
         {[
           { id: 'users', label: 'Usuarios', icon: <Users size={18}/> },
           { id: 'companies', label: 'Empresas', icon: <Building size={18}/> },
           { id: 'areas', label: 'Áreas', icon: <MapPin size={18}/> },
+          { id: 'positions', label: 'Puestos', icon: <Briefcase size={18}/> },
+          { id: 'vehicles', label: 'Vehículos', icon: <Truck size={18}/> },
+          { id: 'machines', label: 'Máquinas', icon: <Wrench size={18}/> },
         ].map(tab => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id as any)}
-            className={`flex items-center gap-2 px-6 py-3 font-medium text-sm transition-colors border-b-2 ${
+            className={`flex items-center gap-2 px-6 py-3 font-medium text-sm transition-colors border-b-2 whitespace-nowrap ${
               activeTab === tab.id ? 'border-brand-800 text-brand-800' : 'border-transparent text-slate-500 hover:text-slate-700'
             }`}
           >
@@ -190,7 +269,7 @@ const MasterData = () => {
           onClick={() => { resetForm(); setIsModalOpen(true); }}
           className="bg-brand-800 hover:bg-brand-900 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors"
         >
-          <Plus size={18} /> Nuevo Registro
+          <Plus size={18} /> Nuevo {getActiveTabTitle()}
         </button>
       </div>
 
@@ -241,7 +320,38 @@ const MasterData = () => {
           </div>
         )}
 
-        {(activeTab === 'companies' || activeTab === 'areas') && (
+        {(activeTab === 'vehicles' || activeTab === 'machines') && (
+           <table className="w-full text-left text-sm text-slate-600">
+              <thead className="bg-slate-50 text-slate-800 font-semibold border-b border-slate-200">
+                <tr>
+                  <th className="p-4">ID</th>
+                  <th className="p-4">{activeTab === 'vehicles' ? 'Patente' : 'Nro. Serie'}</th>
+                  <th className="p-4">Marca</th>
+                  <th className="p-4">Modelo</th>
+                  <th className="p-4 text-right">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(() => {
+                  const list: any[] = activeTab === 'vehicles' ? vehicles : machines;
+                  return list.map((item: any) => (
+                    <tr key={item.id} className="border-b border-slate-100 hover:bg-slate-50">
+                      <td className="p-4 font-mono text-xs text-slate-500">{item.id}</td>
+                      <td className="p-4 font-bold text-slate-800">{activeTab === 'vehicles' ? item.plate : item.serialNumber}</td>
+                      <td className="p-4">{item.brand}</td>
+                      <td className="p-4">{item.model}</td>
+                      <td className="p-4 text-right space-x-2">
+                        <button onClick={() => openEdit(item)} className="p-2 text-slate-500 hover:bg-slate-100 rounded-full"><Edit2 size={16}/></button>
+                        <button onClick={() => deleteItem(item.id)} className="p-2 text-red-500 hover:bg-red-50 rounded-full"><Trash2 size={16}/></button>
+                      </td>
+                    </tr>
+                  ));
+                })()}
+              </tbody>
+           </table>
+        )}
+
+        {(activeTab === 'companies' || activeTab === 'areas' || activeTab === 'positions') && (
           <table className="w-full text-left text-sm text-slate-600">
              <thead className="bg-slate-50 text-slate-800 font-semibold border-b border-slate-200">
                 <tr>
@@ -251,16 +361,24 @@ const MasterData = () => {
                 </tr>
               </thead>
               <tbody>
-                {(activeTab === 'companies' ? companies : areas).map((item: any) => (
+                {/* Dynamically select list based on tab */}
+                {(() => {
+                  let list: any[] = [];
+                  if (activeTab === 'companies') list = companies;
+                  else if (activeTab === 'areas') list = areas;
+                  else if (activeTab === 'positions') list = positions;
+                  
+                  return list.map((item: any) => (
                    <tr key={item.id} className="border-b border-slate-100 hover:bg-slate-50">
-                      <td className="p-4 font-mono text-xs">{item.id}</td>
+                      <td className="p-4 font-mono text-xs w-32">{item.id}</td>
                       <td className="p-4 font-bold text-slate-800">{item.name}</td>
-                      <td className="p-4 text-right space-x-2">
+                      <td className="p-4 text-right space-x-2 w-32">
                         <button onClick={() => openEdit(item)} className="p-2 text-slate-500 hover:bg-slate-100 rounded-full"><Edit2 size={16}/></button>
                         <button onClick={() => deleteItem(item.id)} className="p-2 text-red-500 hover:bg-red-50 rounded-full"><Trash2 size={16}/></button>
                       </td>
                    </tr>
-                ))}
+                  ));
+                })()}
               </tbody>
           </table>
         )}
@@ -286,9 +404,9 @@ const MasterData = () => {
                       <input 
                         required 
                         disabled={!!editingId}
-                        value={formData.id} 
-                        onChange={e => setFormData({...formData, id: e.target.value})}
-                        className="w-full p-2 border border-slate-300 rounded focus:border-brand-500 outline-none disabled:bg-slate-100" 
+                        value={userForm.id} 
+                        onChange={e => setUserForm({...userForm, id: e.target.value})}
+                        className="w-full p-2 border border-slate-300 rounded focus:border-brand-500 outline-none disabled:bg-slate-100 bg-white text-slate-800" 
                       />
                     </div>
                     <div>
@@ -298,7 +416,7 @@ const MasterData = () => {
                         type="email"
                         value={emailInput} 
                         onChange={e => setEmailInput(e.target.value)}
-                        className="w-full p-2 border border-slate-300 rounded focus:border-brand-500 outline-none" 
+                        className="w-full p-2 border border-slate-300 rounded focus:border-brand-500 outline-none bg-white text-slate-800" 
                         placeholder="usuario@empresa.com"
                       />
                       <p className="text-[10px] text-slate-400 mt-1">Para múltiples emails, separe por coma (funcionalidad futura)</p>
@@ -307,27 +425,27 @@ const MasterData = () => {
                       <label className="block text-xs font-bold text-slate-500 mb-1">Nombre *</label>
                       <input 
                         required 
-                        value={formData.firstName} 
-                        onChange={e => setFormData({...formData, firstName: e.target.value})}
-                        className="w-full p-2 border border-slate-300 rounded focus:border-brand-500 outline-none" 
+                        value={userForm.firstName} 
+                        onChange={e => setUserForm({...userForm, firstName: e.target.value})}
+                        className="w-full p-2 border border-slate-300 rounded focus:border-brand-500 outline-none bg-white text-slate-800" 
                       />
                     </div>
                     <div>
                       <label className="block text-xs font-bold text-slate-500 mb-1">Apellido *</label>
                       <input 
                         required 
-                        value={formData.lastName} 
-                        onChange={e => setFormData({...formData, lastName: e.target.value})}
-                        className="w-full p-2 border border-slate-300 rounded focus:border-brand-500 outline-none" 
+                        value={userForm.lastName} 
+                        onChange={e => setUserForm({...userForm, lastName: e.target.value})}
+                        className="w-full p-2 border border-slate-300 rounded focus:border-brand-500 outline-none bg-white text-slate-800" 
                       />
                     </div>
                     <div>
                       <label className="block text-xs font-bold text-slate-500 mb-1">Cargo *</label>
                       <select 
                         required 
-                        value={formData.role} 
-                        onChange={e => setFormData({...formData, role: e.target.value as UserRole})}
-                        className="w-full p-2 border border-slate-300 rounded focus:border-brand-500 outline-none bg-white"
+                        value={userForm.role} 
+                        onChange={e => setUserForm({...userForm, role: e.target.value as UserRole})}
+                        className="w-full p-2 border border-slate-300 rounded focus:border-brand-500 outline-none bg-white text-slate-800"
                       >
                         {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
                       </select>
@@ -336,9 +454,9 @@ const MasterData = () => {
                       <label className="block text-xs font-bold text-slate-500 mb-1">Perfil App *</label>
                       <select 
                         required 
-                        value={formData.profile} 
-                        onChange={e => setFormData({...formData, profile: e.target.value as UserProfile})}
-                        className="w-full p-2 border border-slate-300 rounded focus:border-brand-500 outline-none bg-white"
+                        value={userForm.profile} 
+                        onChange={e => setUserForm({...userForm, profile: e.target.value as UserProfile})}
+                        className="w-full p-2 border border-slate-300 rounded focus:border-brand-500 outline-none bg-white text-slate-800"
                       >
                         {PROFILES.map(p => <option key={p} value={p}>{p}</option>)}
                       </select>
@@ -349,11 +467,11 @@ const MasterData = () => {
                     <label className="block text-xs font-bold text-slate-500 mb-1">Puesto (Matriz de Capacitación) *</label>
                     <select 
                       required 
-                      value={formData.position} 
-                      onChange={e => setFormData({...formData, position: e.target.value})}
-                      className="w-full p-2 border border-slate-300 rounded focus:border-brand-500 outline-none bg-white text-sm"
+                      value={userForm.position} 
+                      onChange={e => setUserForm({...userForm, position: e.target.value})}
+                      className="w-full p-2 border border-slate-300 rounded focus:border-brand-500 outline-none bg-white text-sm text-slate-800"
                     >
-                      {JOB_POSITIONS.map(p => <option key={p} value={p}>{p}</option>)}
+                      {positions.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
                     </select>
                   </div>
 
@@ -362,9 +480,9 @@ const MasterData = () => {
                       <label className="block text-xs font-bold text-slate-500 mb-1">Empresa *</label>
                       <select 
                         required 
-                        value={formData.companyId} 
-                        onChange={e => setFormData({...formData, companyId: e.target.value})}
-                        className="w-full p-2 border border-slate-300 rounded focus:border-brand-500 outline-none bg-white"
+                        value={userForm.companyId} 
+                        onChange={e => setUserForm({...userForm, companyId: e.target.value})}
+                        className="w-full p-2 border border-slate-300 rounded focus:border-brand-500 outline-none bg-white text-slate-800"
                       >
                         <option value="">Seleccionar...</option>
                         {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -374,9 +492,9 @@ const MasterData = () => {
                       <label className="block text-xs font-bold text-slate-500 mb-1">Área *</label>
                       <select 
                         required 
-                        value={formData.areaId} 
-                        onChange={e => setFormData({...formData, areaId: e.target.value})}
-                        className="w-full p-2 border border-slate-300 rounded focus:border-brand-500 outline-none bg-white"
+                        value={userForm.areaId} 
+                        onChange={e => setUserForm({...userForm, areaId: e.target.value})}
+                        className="w-full p-2 border border-slate-300 rounded focus:border-brand-500 outline-none bg-white text-slate-800"
                       >
                         <option value="">Seleccionar...</option>
                         {areas.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
@@ -387,12 +505,12 @@ const MasterData = () => {
                   <div>
                     <label className="block text-xs font-bold text-slate-500 mb-1">Jefe Directo</label>
                     <select 
-                      value={formData.bossId || ''} 
-                      onChange={e => setFormData({...formData, bossId: e.target.value})}
-                      className="w-full p-2 border border-slate-300 rounded focus:border-brand-500 outline-none bg-white"
+                      value={userForm.bossId || ''} 
+                      onChange={e => setUserForm({...userForm, bossId: e.target.value})}
+                      className="w-full p-2 border border-slate-300 rounded focus:border-brand-500 outline-none bg-white text-slate-800"
                     >
                       <option value="">Ninguno</option>
-                      {users.filter(u => u.id !== formData.id).map(u => (
+                      {users.filter(u => u.id !== userForm.id).map(u => (
                         <option key={u.id} value={u.id}>{u.firstName} {u.lastName} - {u.role}</option>
                       ))}
                     </select>
@@ -417,6 +535,42 @@ const MasterData = () => {
                     <button type="submit" className="px-6 py-2 bg-brand-800 text-white rounded-lg hover:bg-brand-900 font-medium">Guardar Usuario</button>
                   </div>
                 </form>
+              ) : (activeTab === 'vehicles' || activeTab === 'machines') ? (
+                <form onSubmit={handleAssetSubmit} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 mb-1">
+                      {activeTab === 'vehicles' ? 'Patente *' : 'Número de Serie *'}
+                    </label>
+                    <input 
+                      required 
+                      value={assetForm.identifier} 
+                      onChange={e => setAssetForm({...assetForm, identifier: e.target.value})}
+                      className="w-full p-2 border border-slate-300 rounded focus:border-brand-500 outline-none bg-white text-slate-800" 
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 mb-1">Marca *</label>
+                    <input 
+                      required 
+                      value={assetForm.brand} 
+                      onChange={e => setAssetForm({...assetForm, brand: e.target.value})}
+                      className="w-full p-2 border border-slate-300 rounded focus:border-brand-500 outline-none bg-white text-slate-800" 
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 mb-1">Modelo *</label>
+                    <input 
+                      required 
+                      value={assetForm.model} 
+                      onChange={e => setAssetForm({...assetForm, model: e.target.value})}
+                      className="w-full p-2 border border-slate-300 rounded focus:border-brand-500 outline-none bg-white text-slate-800" 
+                    />
+                  </div>
+                  <div className="pt-4 flex justify-end gap-3 border-t border-slate-100">
+                    <button type="button" onClick={resetForm} className="px-4 py-2 text-slate-500 hover:bg-slate-100 rounded-lg">Cancelar</button>
+                    <button type="submit" className="px-6 py-2 bg-brand-800 text-white rounded-lg hover:bg-brand-900 font-medium">Guardar {activeTab === 'vehicles' ? 'Vehículo' : 'Máquina'}</button>
+                  </div>
+                </form>
               ) : (
                 <form onSubmit={handleSimpleSubmit} className="space-y-4">
                   <div>
@@ -425,8 +579,8 @@ const MasterData = () => {
                       required 
                       value={simpleName} 
                       onChange={e => setSimpleName(e.target.value)}
-                      className="w-full p-2 border border-slate-300 rounded focus:border-brand-500 outline-none" 
-                      placeholder={`Nombre de ${activeTab === 'companies' ? 'Empresa' : 'Área'}`}
+                      className="w-full p-2 border border-slate-300 rounded focus:border-brand-500 outline-none bg-white text-slate-800" 
+                      placeholder={`Nombre de ${activeTab === 'companies' ? 'Empresa' : activeTab === 'areas' ? 'Área' : 'Puesto'}`}
                     />
                   </div>
                   <div className="pt-4 flex justify-end gap-3 border-t border-slate-100">

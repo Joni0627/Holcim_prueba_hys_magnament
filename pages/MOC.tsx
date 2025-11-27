@@ -106,7 +106,7 @@ const MOC = () => {
                 type="text" 
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                className="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-safety-500 focus:border-safety-500"
+                className="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-safety-500 focus:border-safety-500 bg-white text-slate-900"
                 placeholder="Ej. Reparación Acceso Norte"
               />
             </div>
@@ -117,7 +117,7 @@ const MOC = () => {
                 type="text" 
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
-                className="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-safety-500 focus:border-safety-500"
+                className="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-safety-500 focus:border-safety-500 bg-white text-slate-900"
                 placeholder="Ej. Sector Logística"
               />
             </div>
@@ -130,13 +130,13 @@ const MOC = () => {
               rows={4}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-safety-500 focus:border-safety-500"
+              className="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-safety-500 focus:border-safety-500 bg-white text-slate-900"
               placeholder="Describa la tarea, el motivo del cambio y el impacto operativo..."
             />
           </div>
 
           {/* AI Assistance Section */}
-          <div className="bg-industrial-800 rounded-lg p-4 text-white">
+          <div className="bg-brand-800 rounded-lg p-4 text-white">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
                 <Brain className="text-safety-400" />
@@ -199,7 +199,7 @@ const MOC = () => {
         </div>
         <button 
           onClick={() => setView('create')}
-          className="bg-industrial-900 text-white px-4 py-2.5 rounded-lg font-medium flex items-center gap-2 hover:bg-industrial-800"
+          className="bg-brand-800 text-white px-4 py-2.5 rounded-lg font-medium flex items-center gap-2 hover:bg-brand-900"
         >
           <Plus size={20} /> Nuevo MOC
         </button>
@@ -212,7 +212,7 @@ const MOC = () => {
           <input 
             type="text" 
             placeholder="Buscar por ID, título o ubicación..." 
-            className="w-full pl-10 pr-4 py-2 rounded-md outline-none text-slate-700"
+            className="w-full pl-10 pr-4 py-2 rounded-md outline-none text-slate-900 bg-transparent"
           />
         </div>
       </div>
