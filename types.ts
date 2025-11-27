@@ -14,6 +14,16 @@ export interface JobPosition {
   name: string;
 }
 
+export interface StandardType {
+  id: string;
+  name: string;
+}
+
+export interface RiskType {
+  id: string;
+  name: string;
+}
+
 export interface Vehicle {
   id: string;
   plate: string; // Patente

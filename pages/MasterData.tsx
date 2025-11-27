@@ -1,6 +1,7 @@
+
 import React, { useState } from 'react';
-import { User, Company, Area, UserRole, UserProfile, JobPosition, Vehicle, Machine } from '../types';
-import { Plus, Search, Edit2, Trash2, Users, Building, MapPin, Save, X, Upload, Briefcase, Truck, Wrench } from 'lucide-react';
+import { User, Company, Area, UserRole, UserProfile, JobPosition, Vehicle, Machine, StandardType, RiskType } from '../types';
+import { Plus, Search, Edit2, Trash2, Users, Building, MapPin, Save, X, Upload, Briefcase, Truck, Wrench, ShieldAlert, FileText, ChevronRight } from 'lucide-react';
 
 const INITIAL_JOB_POSITIONS = [
   "OPERARIO DE PRODUCCION - AFR",
@@ -51,10 +52,41 @@ const INITIAL_JOB_POSITIONS = [
 const ROLES: UserRole[] = ['Gerencia', 'Jefatura', 'Coordinador', 'Supervisor', 'Operario', 'Pasante'];
 const PROFILES: UserProfile[] = ['Administrador', 'Usuario', 'Usuario Tercero'];
 
+type TabType = 'users' | 'companies' | 'areas' | 'positions' | 'vehicles' | 'machines' | 'standards' | 'risks';
+
+const TAB_GROUPS = [
+  {
+    label: 'Organización',
+    tabs: [
+      { id: 'users', label: 'Usuarios', icon: <Users size={16}/> },
+      { id: 'companies', label: 'Empresas', icon: <Building size={16}/> },
+      { id: 'areas', label: 'Áreas', icon: <MapPin size={16}/> },
+      { id: 'positions', label: 'Puestos', icon: <Briefcase size={16}/> },
+    ]
+  },
+  {
+    label: 'Activos',
+    tabs: [
+      { id: 'vehicles', label: 'Vehículos', icon: <Truck size={16}/> },
+      { id: 'machines', label: 'Máquinas', icon: <Wrench size={16}/> },
+    ]
+  },
+  {
+    label: 'Parametría MDC',
+    tabs: [
+      { id: 'standards', label: 'Tipos de Estándar', icon: <FileText size={16}/> },
+      { id: 'risks', label: 'Riesgos Asociados', icon: <ShieldAlert size={16}/> },
+    ]
+  }
+];
+
 const MasterData = () => {
-  const [activeTab, setActiveTab] = useState<'users' | 'companies' | 'areas' | 'positions' | 'vehicles' | 'machines'>('users');
+  const [activeTab, setActiveTab] = useState<TabType>('users');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+
+  // Determine current parent group based on activeTab
+  const currentGroup = TAB_GROUPS.find(g => g.tabs.some(t => t.id === activeTab)) || TAB_GROUPS[0];
 
   // Mock Data
   const [companies, setCompanies] = useState<Company[]>([
@@ -76,6 +108,17 @@ const MasterData = () => {
   const [machines, setMachines] = useState<Machine[]>([
     { id: '1', serialNumber: 'SN-998877', brand: 'Caterpillar', model: 'Excavadora 320' },
     { id: '2', serialNumber: 'SN-112233', brand: 'Komatsu', model: 'PC200' }
+  ]);
+  const [standards, setStandards] = useState<StandardType[]>([
+    { id: '1', name: 'Procedimiento Interno' },
+    { id: '2', name: 'Norma ISO 45001' },
+    { id: '3', name: 'Legislación Local' }
+  ]);
+  const [risks, setRisks] = useState<RiskType[]>([
+    { id: '1', name: 'Atrapamiento' },
+    { id: '2', name: 'Caída a distinto nivel' },
+    { id: '3', name: 'Contacto eléctrico' },
+    { id: '4', name: 'Proyección de partículas' }
   ]);
   
   const [users, setUsers] = useState<User[]>([
@@ -99,7 +142,7 @@ const MasterData = () => {
   });
   const [emailInput, setEmailInput] = useState('');
   
-  // Generic Name form (Company, Area, Position)
+  // Generic Name form (Company, Area, Position, Standard, Risk)
   const [simpleName, setSimpleName] = useState('');
 
   // Asset Form (Vehicle / Machine)
@@ -180,6 +223,12 @@ const MasterData = () => {
     } else if (activeTab === 'positions') {
        if (editingId) setPositions(positions.map(p => p.id === editingId ? newItem : p));
        else setPositions([newItem, ...positions]);
+    } else if (activeTab === 'standards') {
+      if (editingId) setStandards(standards.map(p => p.id === editingId ? newItem : p));
+      else setStandards([newItem, ...standards]);
+    } else if (activeTab === 'risks') {
+      if (editingId) setRisks(risks.map(p => p.id === editingId ? newItem : p));
+      else setRisks([newItem, ...risks]);
     }
     resetForm();
   };
@@ -210,6 +259,8 @@ const MasterData = () => {
     if (activeTab === 'positions') setPositions(positions.filter(p => p.id !== id));
     if (activeTab === 'vehicles') setVehicles(vehicles.filter(v => v.id !== id));
     if (activeTab === 'machines') setMachines(machines.filter(m => m.id !== id));
+    if (activeTab === 'standards') setStandards(standards.filter(m => m.id !== id));
+    if (activeTab === 'risks') setRisks(risks.filter(m => m.id !== id));
   };
 
   const getActiveTabTitle = () => {
@@ -220,8 +271,15 @@ const MasterData = () => {
       case 'positions': return 'Puesto';
       case 'vehicles': return 'Vehículo';
       case 'machines': return 'Máquina';
+      case 'standards': return 'Tipo de Estándar';
+      case 'risks': return 'Riesgo Asociado';
       default: return 'Registro';
     }
+  };
+
+  const handleParentTabClick = (group: typeof TAB_GROUPS[0]) => {
+    // Set active tab to the first child of the clicked group
+    setActiveTab(group.tabs[0].id as TabType);
   };
 
   return (
@@ -229,34 +287,55 @@ const MasterData = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold text-brand-800">Datos Maestros</h2>
-          <p className="text-slate-500">Gestión de usuarios, estructuras y activos.</p>
+          <p className="text-slate-500">Gestión de usuarios, estructuras, activos y parametría MDC.</p>
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-2 border-b border-slate-200 overflow-x-auto no-scrollbar">
-        {[
-          { id: 'users', label: 'Usuarios', icon: <Users size={18}/> },
-          { id: 'companies', label: 'Empresas', icon: <Building size={18}/> },
-          { id: 'areas', label: 'Áreas', icon: <MapPin size={18}/> },
-          { id: 'positions', label: 'Puestos', icon: <Briefcase size={18}/> },
-          { id: 'vehicles', label: 'Vehículos', icon: <Truck size={18}/> },
-          { id: 'machines', label: 'Máquinas', icon: <Wrench size={18}/> },
-        ].map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id as any)}
-            className={`flex items-center gap-2 px-6 py-3 font-medium text-sm transition-colors border-b-2 whitespace-nowrap ${
-              activeTab === tab.id ? 'border-brand-800 text-brand-800' : 'border-transparent text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            {tab.icon} {tab.label}
-          </button>
-        ))}
+      {/* Parent Tabs Navigation (Solapas Madres) */}
+      <div className="flex border-b border-slate-200 gap-1">
+        {TAB_GROUPS.map((group, idx) => {
+          const isActiveGroup = group.label === currentGroup.label;
+          return (
+            <button
+              key={idx}
+              onClick={() => handleParentTabClick(group)}
+              className={`
+                px-6 py-3 font-bold text-sm uppercase tracking-wide transition-all relative rounded-t-lg
+                ${isActiveGroup 
+                  ? 'text-brand-800 bg-brand-50/50' 
+                  : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}
+              `}
+            >
+              {group.label}
+              {isActiveGroup && (
+                <div className="absolute bottom-0 left-0 w-full h-0.5 bg-brand-800"></div>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Child Tabs Navigation (Solapas Hijas) */}
+      <div className="bg-slate-50 p-2 rounded-lg flex flex-wrap gap-2">
+         {currentGroup.tabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as TabType)}
+              className={`
+                flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all shadow-sm
+                ${activeTab === tab.id 
+                  ? 'bg-white text-brand-800 border border-slate-200 ring-1 ring-brand-100' 
+                  : 'bg-transparent text-slate-600 hover:bg-slate-200 border border-transparent'}
+              `}
+            >
+              {tab.icon}
+              {tab.label}
+            </button>
+         ))}
       </div>
 
       {/* Toolbar */}
-      <div className="flex justify-between items-center bg-white p-3 rounded-lg border border-slate-200 shadow-sm">
+      <div className="flex justify-between items-center bg-white p-3 rounded-lg border border-slate-200 shadow-sm mt-4">
         <div className="relative">
           <Search className="absolute left-3 top-2.5 text-slate-400" size={18} />
           <input 
@@ -351,7 +430,8 @@ const MasterData = () => {
            </table>
         )}
 
-        {(activeTab === 'companies' || activeTab === 'areas' || activeTab === 'positions') && (
+        {/* Generic Table for Name-Only Types */}
+        {['companies', 'areas', 'positions', 'standards', 'risks'].includes(activeTab) && (
           <table className="w-full text-left text-sm text-slate-600">
              <thead className="bg-slate-50 text-slate-800 font-semibold border-b border-slate-200">
                 <tr>
@@ -367,6 +447,8 @@ const MasterData = () => {
                   if (activeTab === 'companies') list = companies;
                   else if (activeTab === 'areas') list = areas;
                   else if (activeTab === 'positions') list = positions;
+                  else if (activeTab === 'standards') list = standards;
+                  else if (activeTab === 'risks') list = risks;
                   
                   return list.map((item: any) => (
                    <tr key={item.id} className="border-b border-slate-100 hover:bg-slate-50">
@@ -574,13 +656,17 @@ const MasterData = () => {
               ) : (
                 <form onSubmit={handleSimpleSubmit} className="space-y-4">
                   <div>
-                    <label className="block text-xs font-bold text-slate-500 mb-1">Nombre del registro *</label>
+                    <label className="block text-xs font-bold text-slate-500 mb-1">
+                        {activeTab === 'standards' || activeTab === 'risks' 
+                          ? 'Descripción *' 
+                          : 'Nombre del registro *'}
+                    </label>
                     <input 
                       required 
                       value={simpleName} 
                       onChange={e => setSimpleName(e.target.value)}
                       className="w-full p-2 border border-slate-300 rounded focus:border-brand-500 outline-none bg-white text-slate-800" 
-                      placeholder={`Nombre de ${activeTab === 'companies' ? 'Empresa' : activeTab === 'areas' ? 'Área' : 'Puesto'}`}
+                      placeholder={`Ingrese valor para ${getActiveTabTitle()}`}
                     />
                   </div>
                   <div className="pt-4 flex justify-end gap-3 border-t border-slate-100">
