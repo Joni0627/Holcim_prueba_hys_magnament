@@ -1,20 +1,26 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
-const apiKey = process.env.API_KEY || ''; // Ensure this is set in your environment
+// Safe access to process.env for browser compatibility
+const getApiKey = () => {
+  if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
+    return process.env.API_KEY;
+  }
+  return '';
+};
+
+const apiKey = getApiKey();
 const ai = new GoogleGenAI({ apiKey });
 
 export const analyzeRisks = async (description: string, location: string): Promise<{ risks: string[], mitigations: string[] }> => {
   if (!apiKey) {
     console.warn("API Key not found, returning mock data");
     return {
-      risks: ["Riesgo genérico de caída", "Riesgo de atropello"],
+      risks: ["Riesgo genérico de caída (Demo)", "Riesgo de atropello (Demo)"],
       mitigations: ["Usar arnés de seguridad", "Delimitar la zona"]
     };
   }
 
   try {
-    const model = ai.models.get({ model: 'gemini-2.5-flash' });
-    
     const prompt = `
       Actúa como un experto senior en Seguridad e Higiene Industrial (H&S).
       Analiza la siguiente tarea de Mantenimiento o Cambio (MOC):
