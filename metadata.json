@@ -1,0 +1,7 @@
+{
+  "name": "SafetyPro EHS Manager",
+  "description": "Comprehensive Health & Safety management system including Management of Change, Scaffolding Inspections, and Employee Training/Authorizations.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
