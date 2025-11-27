@@ -19,7 +19,8 @@ import {
   Trash2,
   Info,
   X,
-  Edit2
+  Edit2,
+  Eye
 } from 'lucide-react';
 import { Scaffold, ScaffoldStatus, ScaffoldType, ChecklistItemTemplate, ChecklistResponse, Company, User as UserType } from '../types';
 
@@ -91,7 +92,7 @@ const INITIAL_TEMPLATE: ChecklistItemTemplate[] = [
 
 const Scaffolds = () => {
   const [activeTab, setActiveTab] = useState<'management' | 'config'>('management');
-  const [view, setView] = useState<'list' | 'create' | 'inspect'>('list');
+  const [view, setView] = useState<'list' | 'create' | 'inspect' | 'read-only'>('list');
   const [scaffolds, setScaffolds] = useState<Scaffold[]>([]);
   const [template, setTemplate] = useState<ChecklistItemTemplate[]>(INITIAL_TEMPLATE);
   
@@ -216,6 +217,13 @@ const Scaffolds = () => {
     setView('inspect');
   };
 
+  const handleViewDetails = (scaffold: Scaffold) => {
+    setCurrentInspectionId(scaffold.id);
+    setInspectionResponses(scaffold.checklistResponses || {});
+    setFinalVerdict(scaffold.isOperational || false);
+    setView('read-only');
+  };
+
   const handleResponse = (qId: string, status: 'OK' | 'NO_CUMPLE' | null) => {
     if (status === null) {
       const newResponses = { ...inspectionResponses };
@@ -267,7 +275,7 @@ const Scaffolds = () => {
 
   // --- STATUS WORKFLOW ---
   const changeStatus = (id: string, newStatus: ScaffoldStatus) => {
-    if (!confirm(`¿Confirmar cambio de estado a ${newStatus}?`)) return;
+    // Direct status change without confirm dialog for better UX
     setScaffolds(prev => prev.map(s => s.id === id ? { ...s, status: newStatus } : s));
   };
 
@@ -282,17 +290,22 @@ const Scaffolds = () => {
     }
   };
 
-  const renderSlider = (qId: string, currentStatus?: 'OK' | 'NO_CUMPLE') => {
+  const renderSlider = (qId: string, currentStatus?: 'OK' | 'NO_CUMPLE', readOnly: boolean = false) => {
+    // If readOnly, disable interactions
+    const onClickHandler = (status: 'OK' | 'NO_CUMPLE' | null) => {
+      if (!readOnly) handleResponse(qId, status);
+    };
+
     return (
-      <div className="relative w-32 h-10 bg-slate-200 rounded-full flex items-center p-1 shadow-inner select-none cursor-pointer shrink-0">
+      <div className={`relative w-32 h-10 bg-slate-200 rounded-full flex items-center p-1 shadow-inner shrink-0 ${readOnly ? 'opacity-80 cursor-default' : 'cursor-pointer select-none'}`}>
         {/* Neutral Click Area (Center) */}
-        <div onClick={() => handleResponse(qId, null)} className="absolute inset-x-10 inset-y-0 z-10" />
+        <div onClick={() => onClickHandler(null)} className="absolute inset-x-10 inset-y-0 z-10" />
         
         {/* OK Click Area (Left) */}
-        <div onClick={() => handleResponse(qId, 'OK')} className="absolute left-0 w-1/2 h-full z-10" />
+        <div onClick={() => onClickHandler('OK')} className="absolute left-0 w-1/2 h-full z-10" />
 
         {/* Fail Click Area (Right) */}
-        <div onClick={() => handleResponse(qId, 'NO_CUMPLE')} className="absolute right-0 w-1/2 h-full z-10" />
+        <div onClick={() => onClickHandler('NO_CUMPLE')} className="absolute right-0 w-1/2 h-full z-10" />
 
         {/* Labels */}
         <span className={`absolute left-3 text-[10px] font-bold z-0 transition-colors ${currentStatus === 'OK' ? 'text-white' : 'text-slate-500'}`}>OK</span>
@@ -431,18 +444,22 @@ const Scaffolds = () => {
     );
   }
 
-  if (view === 'inspect') {
+  if (view === 'inspect' || view === 'read-only') {
     const scaffold = scaffolds.find(s => s.id === currentInspectionId);
     if (!scaffold) return null;
+    const isReadOnly = view === 'read-only';
 
     return (
       <div className="max-w-4xl mx-auto space-y-6">
         <div className="bg-white p-4 rounded-xl border border-slate-200 flex justify-between items-center shadow-sm">
            <div>
-             <h2 className="text-xl font-bold text-brand-800">Checklist de Inspección</h2>
+             <h2 className="text-xl font-bold text-brand-800">
+                {isReadOnly ? 'Detalle de Inspección' : 'Realizar Inspección'}
+             </h2>
              <p className="text-sm text-slate-500">Andamio: {scaffold.id} - {scaffold.locationDescription}</p>
+             {isReadOnly && <p className="text-xs font-bold text-slate-400 mt-1">MODO LECTURA</p>}
            </div>
-           <button onClick={() => setView('list')} className="text-slate-500">Cancelar</button>
+           <button onClick={() => setView('list')} className="text-slate-500 hover:text-brand-800 font-medium">Volver</button>
         </div>
 
         {SECTIONS.map(section => (
@@ -466,7 +483,7 @@ const Scaffolds = () => {
                         )}
                       </div>
                       <div className="shrink-0 pt-1">
-                         {renderSlider(q.id, response?.status)}
+                         {renderSlider(q.id, response?.status, isReadOnly)}
                       </div>
                     </div>
                     
@@ -474,15 +491,21 @@ const Scaffolds = () => {
                     {response?.status === 'NO_CUMPLE' && (
                       <div className="ml-4 pl-4 border-l-2 border-red-200 space-y-3 animate-fade-in">
                         <textarea 
+                          disabled={isReadOnly}
                           placeholder="Describa el hallazgo..." 
-                          className="w-full p-2 text-sm border border-slate-300 rounded focus:border-red-500 outline-none bg-white text-slate-900"
+                          className={`w-full p-2 text-sm border border-slate-300 rounded focus:border-red-500 outline-none text-slate-900 ${isReadOnly ? 'bg-slate-100 text-slate-500' : 'bg-white'}`}
                           value={response.observation || ''}
                           onChange={(e) => handleObservation(q.id, e.target.value)}
                         />
-                        {q.allowPhoto && (
+                        {q.allowPhoto && !isReadOnly && (
                            <button className="flex items-center gap-2 text-sm text-brand-600 hover:text-brand-800 font-medium">
                              <Camera size={16} /> Adjuntar Evidencia Fotográfica
                            </button>
+                        )}
+                        {q.allowPhoto && isReadOnly && (
+                            <div className="flex items-center gap-2 text-xs text-slate-400">
+                                <Camera size={14} /> Evidencia fotográfica (No disponible en vista previa)
+                            </div>
                         )}
                       </div>
                     )}
@@ -498,27 +521,31 @@ const Scaffolds = () => {
           <div className="flex items-center gap-4 mb-6">
              <span className="text-sm font-medium">¿El andamio está apto para su uso?</span>
              <button 
+                disabled={isReadOnly}
                 onClick={() => setFinalVerdict(true)} 
-                className={`px-4 py-2 rounded-lg font-bold border ${finalVerdict ? 'bg-green-600 text-white border-green-600' : 'bg-white text-slate-400 border-slate-200'}`}
+                className={`px-4 py-2 rounded-lg font-bold border ${finalVerdict ? 'bg-green-600 text-white border-green-600' : 'bg-white text-slate-400 border-slate-200'} ${isReadOnly ? 'opacity-80' : ''}`}
              >
                HABILITADO
              </button>
              <button 
+                disabled={isReadOnly}
                 onClick={() => setFinalVerdict(false)} 
-                className={`px-4 py-2 rounded-lg font-bold border ${!finalVerdict ? 'bg-red-600 text-white border-red-600' : 'bg-white text-slate-400 border-slate-200'}`}
+                className={`px-4 py-2 rounded-lg font-bold border ${!finalVerdict ? 'bg-red-600 text-white border-red-600' : 'bg-white text-slate-400 border-slate-200'} ${isReadOnly ? 'opacity-80' : ''}`}
              >
                NO HABILITADO
              </button>
           </div>
           
-          <div className="flex justify-end pt-4 border-t border-slate-100">
-             <button 
-               onClick={submitInspection}
-               className="bg-brand-800 hover:bg-brand-900 text-white px-8 py-3 rounded-lg font-bold shadow-lg flex items-center gap-2"
-             >
-               <Save size={20} /> Guardar Inspección
-             </button>
-          </div>
+          {!isReadOnly && (
+            <div className="flex justify-end pt-4 border-t border-slate-100">
+                <button 
+                onClick={submitInspection}
+                className="bg-brand-800 hover:bg-brand-900 text-white px-8 py-3 rounded-lg font-bold shadow-lg flex items-center gap-2"
+                >
+                <Save size={20} /> Guardar Inspección
+                </button>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -731,21 +758,46 @@ const Scaffolds = () => {
                )}
                
                {s.status === ScaffoldStatus.INSPECCIONADO && (
-                 <button 
-                   onClick={() => changeStatus(s.id, ScaffoldStatus.A_DESMONTAR)}
-                   className="w-full border border-orange-300 text-orange-700 hover:bg-orange-50 py-2 px-4 rounded-lg font-medium text-sm flex items-center justify-center gap-2"
-                 >
-                   <AlertTriangle size={16}/> Solicitar Desarme
-                 </button>
+                 <>
+                  <button 
+                    onClick={() => handleViewDetails(s)}
+                    className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 py-2 px-4 rounded-lg font-medium text-sm flex items-center justify-center gap-2"
+                  >
+                    <Eye size={16}/> Ver Detalle
+                  </button>
+                  <button 
+                    onClick={() => changeStatus(s.id, ScaffoldStatus.A_DESMONTAR)}
+                    className="w-full border border-orange-300 text-orange-700 hover:bg-orange-50 py-2 px-4 rounded-lg font-medium text-sm flex items-center justify-center gap-2"
+                  >
+                    <AlertTriangle size={16}/> Solicitar Desarme
+                  </button>
+                 </>
                )}
 
                {s.status === ScaffoldStatus.A_DESMONTAR && (
+                 <>
+                  <button 
+                    onClick={() => handleViewDetails(s)}
+                    className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 py-2 px-4 rounded-lg font-medium text-sm flex items-center justify-center gap-2"
+                  >
+                    <Eye size={16}/> Ver Detalle
+                  </button>
+                  <button 
+                      onClick={() => changeStatus(s.id, ScaffoldStatus.DESMONTADO)}
+                      className="w-full bg-slate-800 text-white hover:bg-slate-900 py-2 px-4 rounded-lg font-medium text-sm flex items-center justify-center gap-2"
+                  >
+                    <ArrowRight size={16}/> Confirmar Desarme
+                  </button>
+                 </>
+               )}
+
+               {s.status === ScaffoldStatus.DESMONTADO && (
                  <button 
-                    onClick={() => changeStatus(s.id, ScaffoldStatus.DESMONTADO)}
-                    className="w-full bg-slate-800 text-white hover:bg-slate-900 py-2 px-4 rounded-lg font-medium text-sm flex items-center justify-center gap-2"
-                 >
-                   <ArrowRight size={16}/> Confirmar Desarme
-                 </button>
+                    onClick={() => handleViewDetails(s)}
+                    className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 py-2 px-4 rounded-lg font-medium text-sm flex items-center justify-center gap-2"
+                  >
+                    <Eye size={16}/> Ver Detalle
+                  </button>
                )}
                
                <div className="text-xs text-center text-slate-400 mt-1">
