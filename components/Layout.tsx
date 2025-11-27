@@ -61,7 +61,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               </div>
               <span className="font-bold text-xl tracking-tight whitespace-nowrap">Management</span>
             </div>
-            <button onClick={() => setSidebarOpen(false)} className="lg:hidden text-slate-300 hover:text-white">
+            <button onClick={() => setSidebarOpen(false)} className="text-slate-300 hover:text-white">
               <X size={24} />
             </button>
           </div>
