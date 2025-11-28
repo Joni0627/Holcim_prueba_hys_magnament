@@ -183,7 +183,7 @@ const Dashboard = () => {
           <span className="text-sm">Sincronización: Al día</span>
         </div>
         <div className="flex items-center gap-3 text-slate-500">
-           <span className="text-sm">Versión 1.0.4</span>
+           <span className="text-sm">Versión 1.0.9</span>
         </div>
       </div>
     </div>
