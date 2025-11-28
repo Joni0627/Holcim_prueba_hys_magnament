@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { signInWithEmailAndPassword } from 'firebase/auth';
+import { signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { auth } from '../services/firebase';
 import { useNavigate } from 'react-router-dom';
 import { ShieldCheck, Loader2 } from 'lucide-react';
@@ -8,6 +8,7 @@ const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
@@ -15,6 +16,7 @@ const Login = () => {
     e.preventDefault();
     setLoading(true);
     setError('');
+    setSuccess('');
     
     try {
       await signInWithEmailAndPassword(auth, email, password);
@@ -27,6 +29,25 @@ const Login = () => {
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResetPassword = async () => {
+    if (!email) {
+        setError('Por favor, ingrese su email en el campo de arriba para restablecer la contraseña.');
+        return;
+    }
+    setLoading(true);
+    setError('');
+    setSuccess('');
+    try {
+        await sendPasswordResetEmail(auth, email);
+        setSuccess(`Se ha enviado un correo de recuperación a ${email}. Revise su bandeja de entrada.`);
+    } catch (err: any) {
+        console.error(err);
+        setError('Error al enviar correo de recuperación: ' + err.message);
+    } finally {
+        setLoading(false);
     }
   };
 
@@ -45,6 +66,11 @@ const Login = () => {
           {error && (
             <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm font-medium border border-red-100">
               {error}
+            </div>
+          )}
+          {success && (
+            <div className="bg-green-50 text-green-600 p-3 rounded-lg text-sm font-medium border border-green-100">
+              {success}
             </div>
           )}
           
@@ -80,9 +106,16 @@ const Login = () => {
             {loading ? <Loader2 className="animate-spin" /> : 'Ingresar'}
           </button>
           
-          <p className="text-center text-xs text-slate-400 mt-4">
-            Si olvidó su contraseña, contacte a Sistemas.
-          </p>
+          <div className="text-center mt-4">
+            <button 
+                type="button"
+                onClick={handleResetPassword}
+                disabled={loading}
+                className="text-xs text-brand-600 hover:text-brand-800 underline font-medium"
+            >
+                ¿Olvidó su contraseña? Solicitar blanqueo
+            </button>
+          </div>
         </form>
       </div>
     </div>

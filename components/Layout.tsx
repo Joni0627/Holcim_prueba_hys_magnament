@@ -8,6 +8,7 @@ import {
   Database
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -17,6 +18,7 @@ const Layout = ({ children }: LayoutProps) => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const navigate = useNavigate();
   const location = useLocation();
+  const { logout, user } = useAuth();
 
   useEffect(() => {
     // Initial check for screen size to decide sidebar state
@@ -34,6 +36,15 @@ const Layout = ({ children }: LayoutProps) => {
     navigate(path);
     if (window.innerWidth < 1024) {
       setSidebarOpen(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      navigate('/login');
+    } catch (error) {
+      console.error("Failed to log out", error);
     }
   };
 
@@ -86,16 +97,19 @@ const Layout = ({ children }: LayoutProps) => {
           <div className="p-4 border-t border-brand-700 bg-brand-900 shrink-0">
             <div className="flex items-center gap-3 mb-4">
               <img 
-                src="https://picsum.photos/40/40" 
+                src={user?.photoURL || "https://ui-avatars.com/api/?name=" + (user?.email || "User") + "&background=random"}
                 alt="User" 
                 className="w-10 h-10 rounded-full border-2 border-slate-400 shrink-0"
               />
               <div className="overflow-hidden">
-                <p className="text-sm font-semibold truncate">Carlos Mendez</p>
-                <p className="text-xs text-slate-400 truncate">Supervisor H&S</p>
+                <p className="text-sm font-semibold truncate">{user?.email?.split('@')[0] || 'Usuario'}</p>
+                <p className="text-xs text-slate-400 truncate">{user?.email}</p>
               </div>
             </div>
-            <button className="flex items-center gap-2 text-slate-400 hover:text-white text-sm w-full whitespace-nowrap">
+            <button 
+              onClick={handleLogout}
+              className="flex items-center gap-2 text-slate-400 hover:text-white text-sm w-full whitespace-nowrap"
+            >
               <LogOut size={16} /> Cerrar Sesión
             </button>
           </div>
