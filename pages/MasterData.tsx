@@ -1,12 +1,12 @@
 
 import React, { useState, useEffect } from 'react';
-import { User, Company, Area, UserRole, UserProfile, JobPosition, Vehicle, Machine, StandardType, RiskType, Evaluation, Question, Course, TrainingPlan } from '../types';
-import { Plus, Search, Edit2, Trash2, Users, Building, MapPin, X, Upload, Briefcase, Truck, Wrench, ShieldAlert, FileText, GraduationCap, BookOpen, Layers, CheckSquare, Link, ArrowLeft, Database, Loader2, Info } from 'lucide-react';
+import { User, Company, Area, Question, Course, TrainingPlan, Evaluation } from '../types';
+import { Plus, Search, Edit2, Trash2, Users, Building, MapPin, X, Briefcase, Truck, Wrench, ShieldAlert, FileText, CheckSquare, BookOpen, Layers, ArrowLeft, Database, Loader2, Info } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { db } from '../services/firebase';
 import { collection, getDocs, addDoc, updateDoc, doc, deleteDoc, setDoc } from 'firebase/firestore';
 
-// --- INITIAL MOCK DATA EXPORTED FOR SEEDING ---
+// --- INITIAL MOCK DATA EXPORTED FOR SEEDING (Keep code but hide button) ---
 export const INITIAL_JOB_POSITIONS_MOCK = [
   "OPERARIO DE PRODUCCION - AFR",
   "OPERARIO DE PRODUCCION - MOLINERO CRUDO - CEMENTO",
@@ -124,6 +124,7 @@ const MasterData = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [isSeeding, setIsSeeding] = useState(false);
 
   // Dynamic Data State
@@ -180,29 +181,24 @@ const MasterData = () => {
     fetchData();
   }, [activeTab]);
 
-  // --- SEED DATABASE UTILITY ---
+  // --- SEED DATABASE UTILITY (HIDDEN IN UI) ---
   const seedDatabase = async () => {
     if (!confirm("⚠️ ¿Desea inicializar la base de datos con los datos de prueba? Esto cargará usuarios, planes y cursos iniciales.")) return;
     
     setIsSeeding(true);
     try {
-       // Seed Positions
        for (const posName of INITIAL_JOB_POSITIONS_MOCK) {
           await addDoc(collection(db, 'positions'), { name: posName });
        }
-       // Seed Evaluations
        for (const ev of INITIAL_EVALUATIONS_MOCK) {
           await setDoc(doc(db, 'evaluations', ev.id), ev);
        }
-       // Seed Courses
        for (const co of INITIAL_COURSES_MOCK) {
           await setDoc(doc(db, 'courses', co.id), co);
        }
-       // Seed Plans
        for (const pl of INITIAL_PLANS_MOCK) {
           await setDoc(doc(db, 'plans', pl.id), pl);
        }
-       // Seed Initial Users
        const initialUser: User = { 
            id: '20304050', firstName: 'Carlos', lastName: 'Mendez', emails: ['carlos@empresa.com'], 
            role: 'Supervisor', position: 'SUPERVISOR DE MANTENIMIENTO', profile: 'Usuario', 
@@ -211,7 +207,7 @@ const MasterData = () => {
        await setDoc(doc(db, 'users', initialUser.id), initialUser);
 
        alert("✅ Base de datos inicializada correctamente!");
-       fetchData(); // Refresh current view
+       fetchData();
     } catch (e: any) {
        console.error(e);
        alert(`Error al inicializar datos: ${e.message}`);
@@ -246,7 +242,6 @@ const MasterData = () => {
         await updateDoc(docRef, formData);
       } else {
         // Create
-        // Use custom ID if provided in form (e.g. User DNI), else auto-ID
         if (formData.id && activeTab === 'users') {
              await setDoc(doc(db, collectionName, formData.id), formData);
         } else {
@@ -291,7 +286,7 @@ const MasterData = () => {
     });
   };
 
-  // --- QUESTION MANAGEMENT (CLIENT SIDE LOGIC FOR FORM) ---
+  // --- QUESTION MANAGEMENT ---
   const saveQuestion = () => {
     if (!tempQuestion.text) return;
     const q: Question = { ...tempQuestion as Question, id: tempQuestion.id || Date.now().toString() };
@@ -323,6 +318,8 @@ const MasterData = () => {
           </div>
         </div>
         
+        {/* Seed button hidden as requested */}
+        {/* 
         <button 
            onClick={seedDatabase} 
            disabled={isSeeding}
@@ -330,7 +327,8 @@ const MasterData = () => {
         >
            {isSeeding ? <Loader2 className="animate-spin" size={16} /> : <Database size={16} />}
            Inicializar BD (Seed)
-        </button>
+        </button> 
+        */}
       </div>
 
       <div className="flex border-b border-slate-200 gap-1 overflow-x-auto no-scrollbar">
@@ -413,7 +411,6 @@ const MasterData = () => {
             </div>
             
             <div className="p-6">
-               {/* DYNAMIC FORM BASED ON TAB */}
                <form onSubmit={handleSubmit} className="space-y-4">
                   
                   {activeTab === 'users' && (
@@ -476,28 +473,50 @@ const MasterData = () => {
                      </>
                   )}
 
-                  {/* SIMPLE NAME FORMS */}
                   {['companies', 'areas', 'positions', 'standards', 'risks'].includes(activeTab) && (
                       <input required placeholder="Nombre" className="w-full p-2 border rounded text-slate-900 bg-white" value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} />
                   )}
+                  
+                  {activeTab === 'vehicles' && (
+                     <>
+                        <input required placeholder="Patente" className="w-full p-2 border rounded text-slate-900 bg-white" value={formData.plate || ''} onChange={e => setFormData({...formData, plate: e.target.value})} />
+                        <input required placeholder="Marca" className="w-full p-2 border rounded text-slate-900 bg-white" value={formData.brand || ''} onChange={e => setFormData({...formData, brand: e.target.value})} />
+                        <input required placeholder="Modelo" className="w-full p-2 border rounded text-slate-900 bg-white" value={formData.model || ''} onChange={e => setFormData({...formData, model: e.target.value})} />
+                     </>
+                  )}
 
-                  {/* COURSES FORM */}
+                  {activeTab === 'machines' && (
+                     <>
+                        <input required placeholder="Nro Serie" className="w-full p-2 border rounded text-slate-900 bg-white" value={formData.serialNumber || ''} onChange={e => setFormData({...formData, serialNumber: e.target.value})} />
+                        <input required placeholder="Marca" className="w-full p-2 border rounded text-slate-900 bg-white" value={formData.brand || ''} onChange={e => setFormData({...formData, brand: e.target.value})} />
+                        <input required placeholder="Modelo" className="w-full p-2 border rounded text-slate-900 bg-white" value={formData.model || ''} onChange={e => setFormData({...formData, model: e.target.value})} />
+                     </>
+                  )}
+
                   {activeTab === 'courses' && (
                      <>
                         <input required placeholder="Título" className="w-full p-2 border rounded text-slate-900 bg-white" value={formData.title || ''} onChange={e => setFormData({...formData, title: e.target.value})} />
                         <textarea placeholder="Descripción" className="w-full p-2 border rounded text-slate-900 bg-white" value={formData.description || ''} onChange={e => setFormData({...formData, description: e.target.value})} />
-                        <input placeholder="URL Contenido" className="w-full p-2 border rounded text-slate-900 bg-white" value={formData.contentUrl || ''} onChange={e => setFormData({...formData, contentUrl: e.target.value})} />
+                        <input placeholder="URL Contenido (Video/PDF)" className="w-full p-2 border rounded text-slate-900 bg-white" value={formData.contentUrl || ''} onChange={e => setFormData({...formData, contentUrl: e.target.value})} />
                         <div className="grid grid-cols-2 gap-4">
                            <input type="number" placeholder="Vigencia (Meses)" className="w-full p-2 border rounded text-slate-900 bg-white" value={formData.validityMonths || ''} onChange={e => setFormData({...formData, validityMonths: Number(e.target.value)})} />
+                        </div>
+                        <div className="flex gap-4">
+                            <label className="flex items-center gap-2 text-sm">
+                                <input type="checkbox" checked={formData.isOneTime || false} onChange={e => setFormData({...formData, isOneTime: e.target.checked})} />
+                                Por única vez
+                            </label>
+                            <label className="flex items-center gap-2 text-sm">
+                                <input type="checkbox" checked={formData.requiresPractical || false} onChange={e => setFormData({...formData, requiresPractical: e.target.checked})} />
+                                Requiere Práctico
+                            </label>
                         </div>
                      </>
                   )}
 
-                  {/* PLANS FORM */}
                   {activeTab === 'plans' && (
                      <>
                         <input required placeholder="Nombre del Plan" className="w-full p-2 border rounded text-slate-900 bg-white" value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} />
-                        {/* Note: Multi-select logic here is simplified for brevity in this response, ideally would reuse previous components */}
                      </>
                   )}
 
@@ -505,7 +524,6 @@ const MasterData = () => {
                       <>
                         <input required placeholder="Nombre Examen" className="w-full p-2 border rounded text-slate-900 bg-white" value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} />
                         <input type="number" placeholder="Puntaje Aprobación" className="w-full p-2 border rounded text-slate-900 bg-white" value={formData.passingScore || ''} onChange={e => setFormData({...formData, passingScore: Number(e.target.value)})} />
-                        <p className="text-xs text-slate-400 italic">La edición de preguntas complejas se habilitará en la próxima versión.</p>
                       </>
                   )}
 

@@ -1,17 +1,13 @@
 
 import React, { useState, useMemo } from 'react';
-import { PlayCircle, FileText, CheckCircle, Clock, AlertCircle, Award, CheckSquare, Layers, Video, Lock, ClipboardCheck, UserCheck, ArrowLeft, RotateCcw } from 'lucide-react';
-import { Course, Evaluation, Question, UserTrainingProgress, QuizAttempt } from '../types';
+import { PlayCircle, FileText, CheckCircle, Clock, AlertCircle, Award, Video, Lock, ClipboardCheck, UserCheck, ArrowLeft, Layers } from 'lucide-react';
+import { Course, Evaluation, UserTrainingProgress, QuizAttempt } from '../types';
 import { INITIAL_COURSES, INITIAL_EVALUATIONS, INITIAL_PLANS } from './MasterData';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
-// --- MOCK USER CONTEXT ---
-const CURRENT_USER_POSITION = "OPERARIO DE PRODUCCION - AFR";
-const CURRENT_USER_ID = "27334";
-
-// --- MOCK PROGRESS DB ---
+// --- MOCK PROGRESS DB (Would be fetched from Firestore in full version) ---
 const MOCK_PROGRESS: UserTrainingProgress[] = [
-  // Example: User has viewed material for Course 1 but not passed exam yet
   { userId: '27334', courseId: '1', status: 'PENDING', materialViewed: false, attempts: [] }
 ];
 
@@ -84,17 +80,26 @@ interface CourseGroup {
 
 const Training = () => {
   const navigate = useNavigate();
+  const { userProfile, user } = useAuth();
   const [activeTab, setActiveTab] = useState<'my-training' | 'hs-validation'>('my-training');
   const [activeCourse, setActiveCourse] = useState<Course | null>(null);
   const [viewMode, setViewMode] = useState<'details' | 'quiz' | null>(null);
   const [activeGroupKey, setActiveGroupKey] = useState<string | null>(null);
   const [myProgress, setMyProgress] = useState<UserTrainingProgress[]>(MOCK_PROGRESS);
 
-  // Toggle for Demo Roles
-  const [demoRole, setDemoRole] = useState<'Operario' | 'H&S'>('Operario');
+  const currentUserPosition = userProfile?.position || '';
+  const currentUserId = userProfile?.id || user?.uid || 'unknown';
+
+  // Logic to determine if user can see HS Validation tab
+  // Checks if user is Supervisor, Manager, or HYS staff
+  const isHSPersonnel = 
+      userProfile?.role === 'Supervisor' || 
+      userProfile?.role === 'Jefatura' || 
+      userProfile?.role === 'Coordinador' || 
+      userProfile?.position?.includes('HYS');
 
   // 1. Find User's Plan based on Position
-  const myPlan = INITIAL_PLANS.find(p => p.positionIds.includes(CURRENT_USER_POSITION));
+  const myPlan = INITIAL_PLANS.find(p => p.positionIds.includes(currentUserPosition));
   
   // 2. Get Courses from that Plan
   const myCourses = myPlan ? INITIAL_COURSES.filter(c => myPlan.courseIds.includes(c.id)) : [];
@@ -149,13 +154,12 @@ const Training = () => {
   const handleVideoComplete = () => {
     if (!activeCourse) return;
     
-    // Mark material as viewed
     setMyProgress(prev => {
       const existing = prev.find(p => p.courseId === activeCourse.id);
       if (existing) {
         return prev.map(p => p.courseId === activeCourse.id ? { ...p, materialViewed: true } : p);
       } else {
-        return [...prev, { userId: CURRENT_USER_ID, courseId: activeCourse.id, status: 'PENDING', materialViewed: true, attempts: [] }];
+        return [...prev, { userId: currentUserId, courseId: activeCourse.id, status: 'PENDING', materialViewed: true, attempts: [] }];
       }
     });
 
@@ -180,9 +184,6 @@ const Training = () => {
     if (!passed) {
         // Record failed attempt
         setMyProgress(prev => {
-           // We need to update attempts for at least one course in the group to track history
-           // For simplicity, we update all of them or just attach to the first one found
-           // Logic: Find progress for courses in group, if exists, append attempt.
            const courseIds = group.courses.map(c => c.id);
            return prev.map(p => {
              if (courseIds.includes(p.courseId)) {
@@ -200,10 +201,7 @@ const Training = () => {
     
     const completionDate = new Date().toLocaleDateString();
 
-    // Update ALL courses in this group
     setMyProgress(prev => {
-      // Remove old entries for these courses to replace them clean, OR merge logic
-      // Better to merge to keep attempt history
       const courseIds = group.courses.map(c => c.id);
       
       return prev.map(p => {
@@ -220,11 +218,10 @@ const Training = () => {
          }
          return p;
       }).concat(
-        // Add entries for courses that didn't exist in progress yet (edge case if material wasn't viewed but exam taken? logic prevents this but good safety)
         group.courses.filter(c => !prev.some(p => p.courseId === c.id)).map(c => {
             const status: 'PENDING_PRACTICAL' | 'COMPLETED' = c.requiresPractical ? 'PENDING_PRACTICAL' : 'COMPLETED';
             return {
-                userId: CURRENT_USER_ID,
+                userId: currentUserId,
                 courseId: c.id,
                 status,
                 score,
@@ -248,7 +245,7 @@ const Training = () => {
                     ...p, 
                     status: 'COMPLETED', 
                     completionDate: new Date().toLocaleDateString(),
-                    practicalValidatedBy: 'ADMIN_HS',
+                    practicalValidatedBy: currentUserId,
                     practicalValidatedAt: new Date().toISOString()
                 };
             }
@@ -358,12 +355,6 @@ const Training = () => {
           </div>
           
           <div className="flex gap-4 items-center">
-              {/* Role Switcher for Demo */}
-              <div className="flex gap-2 items-center bg-yellow-50 p-2 rounded border border-yellow-200">
-                 <span className="text-xs font-bold text-yellow-800">Rol: {demoRole}</span>
-                 <button onClick={() => setDemoRole(prev => prev === 'Operario' ? 'H&S' : 'Operario')} className="text-xs underline text-slate-500">Cambiar Rol (Demo)</button>
-              </div>
-
               <div className="flex bg-white p-1 rounded-lg border border-slate-200">
                  <button 
                    onClick={() => setActiveTab('my-training')}
@@ -371,7 +362,7 @@ const Training = () => {
                  >
                     Mis Cursos
                  </button>
-                 {demoRole === 'H&S' && (
+                 {isHSPersonnel && (
                     <button 
                     onClick={() => setActiveTab('hs-validation')}
                     className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all ${activeTab === 'hs-validation' ? 'bg-brand-800 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}

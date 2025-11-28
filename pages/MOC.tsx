@@ -1,18 +1,11 @@
 
 import React, { useState, useEffect } from 'react';
 import { MOCRecord, MOCStatus, User, Area, RiskType, StandardType } from '../types';
-import { Plus, Search, Check, Send, AlertTriangle, Calendar, User as UserIcon, MapPin, Upload, FileText, ArrowLeft, History } from 'lucide-react';
+import { Plus, Search, Check, Send, Calendar, User as UserIcon, MapPin, Upload, FileText, ArrowLeft, History, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../services/firebase';
-import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
-
-const MOCK_AREAS: Area[] = [
-  { id: '1', name: 'Producción' },
-  { id: '2', name: 'Mantenimiento' },
-  { id: '3', name: 'Logística' },
-  { id: '4', name: 'Calidad' },
-];
+import { collection, getDocs, doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 
 const MOCK_RISKS: RiskType[] = [
   { id: '1', name: 'Trabajo en Altura' },
@@ -34,65 +27,71 @@ const MOC = () => {
   const navigate = useNavigate();
   const { userProfile } = useAuth();
   const [view, setView] = useState<'board' | 'create' | 'detail' | 'history'>('board');
+  const [isLoading, setIsLoading] = useState(false);
   
   // State for Form
   const [formData, setFormData] = useState<Partial<MOCRecord>>({
-    requesterId: userProfile?.id || '',
     status: MOCStatus.PENDING,
     riskIds: [],
     involvedAreaIds: []
   });
 
-  const [requesterSearchId, setRequesterSearchId] = useState(userProfile?.id || '');
+  const [requesterSearchId, setRequesterSearchId] = useState('');
   const [requesterNameDisplay, setRequesterNameDisplay] = useState('');
   const [selectedMoc, setSelectedMoc] = useState<MOCRecord | null>(null);
 
-  // Users lookup state for Dropdowns
+  // Users and Areas lookup state
   const [usersLookup, setUsersLookup] = useState<User[]>([]);
+  const [areasLookup, setAreasLookup] = useState<Area[]>([]);
+  
+  // Real Data State
+  const [mocs, setMocs] = useState<MOCRecord[]>([]);
 
-  // Fetch all users on mount to populate dropdowns
+  // Fetch Lookups and Real Data
   useEffect(() => {
-    const fetchUsers = async () => {
+    const fetchInitialData = async () => {
       try {
-        const querySnapshot = await getDocs(collection(db, 'users'));
-        const users = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
+        setIsLoading(true);
+        // Lookups
+        const usersSnap = await getDocs(collection(db, 'users'));
+        const users = usersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
         setUsersLookup(users);
+
+        const areasSnap = await getDocs(collection(db, 'areas'));
+        const areas = areasSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Area));
+        setAreasLookup(areas);
+
+        // MOC Records
+        await fetchMocs();
       } catch (error) {
-        console.error("Error fetching users:", error);
+        console.error("Error fetching initial data:", error);
+      } finally {
+        setIsLoading(false);
       }
     };
-    fetchUsers();
+    fetchInitialData();
   }, []);
 
-  // Update form requester ID if user profile loads late
+  const fetchMocs = async () => {
+    try {
+      const querySnapshot = await getDocs(collection(db, 'mocs'));
+      const fetchedMocs = querySnapshot.docs.map(doc => doc.data() as MOCRecord);
+      // Sort by date desc
+      fetchedMocs.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      setMocs(fetchedMocs);
+    } catch (error) {
+      console.error("Error fetching MOCs:", error);
+    }
+  };
+
+  // Update form requester ID if user profile loads late or resets
   useEffect(() => {
-    if (userProfile?.id) {
+    if (view === 'create' && userProfile?.id) {
         setRequesterSearchId(userProfile.id);
         setFormData(prev => ({ ...prev, requesterId: userProfile.id }));
         setRequesterNameDisplay(`${userProfile.firstName} ${userProfile.lastName}`);
     }
-  }, [userProfile]);
-
-  // Mock Data List
-  const [mocs, setMocs] = useState<MOCRecord[]>([
-    {
-      id: 'MDC-2023-001',
-      title: 'Reparación Calle Acceso Norte',
-      requesterId: '27334',
-      startDate: '2023-10-25',
-      endDate: '2023-10-30',
-      responsibleId: '11223',
-      approverId: '99887',
-      standardTypeId: '2',
-      description: 'Repavimentación de sector dañado por lluvia. Se requiere movimiento de suelo.',
-      riskIds: ['6', '5'],
-      involvedAreaIds: ['3'],
-      actionPlan: '1. Señalizar desvío. 2. Ingreso maquinaria. 3. Compactación.',
-      status: MOCStatus.EXECUTION,
-      createdAt: '2023-10-25',
-      locationText: 'Acceso Planta - Portón 2'
-    }
-  ]);
+  }, [userProfile, view]);
 
   // --- HANDLERS ---
 
@@ -148,42 +147,70 @@ const MOC = () => {
     });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.title || !formData.startDate || !formData.approverId || !formData.requesterId) {
       alert("Complete los campos obligatorios.");
       return;
     }
 
-    const newMOC: MOCRecord = {
-      ...formData as MOCRecord,
-      id: `MDC-${new Date().getFullYear()}-${String(mocs.length + 1).padStart(3, '0')}`,
-      createdAt: new Date().toLocaleDateString(), // Use simpler date format for mock
-      status: MOCStatus.PENDING 
-    };
-    
-    setMocs([newMOC, ...mocs]);
-    alert("MDC Creado y enviado a aprobación.");
-    setFormData({ requesterId: userProfile?.id || '', status: MOCStatus.PENDING, riskIds: [], involvedAreaIds: [] });
-    setRequesterNameDisplay(''); 
-    setView('board');
+    setIsLoading(true);
+    try {
+      // Generate a readable ID
+      const newId = `MDC-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 10000)).padStart(4, '0')}`;
+      
+      const newMOC: MOCRecord = {
+        ...formData as MOCRecord,
+        id: newId,
+        createdAt: new Date().toLocaleDateString(),
+        status: MOCStatus.PENDING 
+      };
+
+      // Save to Firestore with specific ID
+      await setDoc(doc(db, 'mocs', newId), newMOC);
+      
+      await fetchMocs(); // Refresh list
+      alert("MDC Creado y enviado a aprobación.");
+      
+      // Reset Form
+      setFormData({ status: MOCStatus.PENDING, riskIds: [], involvedAreaIds: [] });
+      setRequesterNameDisplay(''); 
+      setView('board');
+    } catch (error: any) {
+      console.error(error);
+      alert("Error al guardar MDC: " + error.message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const updateStatus = (moc: MOCRecord, newStatus: MOCStatus) => {
-    const updated = { 
-        ...moc, 
+  const updateStatus = async (moc: MOCRecord, newStatus: MOCStatus) => {
+    setIsLoading(true);
+    try {
+      const updatedData = { 
         status: newStatus,
         createdAt: newStatus === MOCStatus.COMPLETED ? new Date().toLocaleDateString() : moc.createdAt 
-    };
-    setMocs(prev => prev.map(m => m.id === moc.id ? updated : m));
-    setSelectedMoc(updated);
-    
-    if (newStatus === MOCStatus.APPROVED) alert("MDC Aprobado.");
-    if (newStatus === MOCStatus.REJECTED) alert("MDC Rechazado.");
-    if (newStatus === MOCStatus.EXECUTION) alert("MDC en Ejecución.");
-    if (newStatus === MOCStatus.COMPLETED) {
-        alert("MDC Finalizado.");
-        setView('board'); // Go back to board to see it in Done column
+      };
+
+      await updateDoc(doc(db, 'mocs', moc.id), updatedData);
+      
+      // Update local state to reflect change immediately without full refetch
+      const updatedMoc = { ...moc, ...updatedData };
+      setMocs(prev => prev.map(m => m.id === moc.id ? updatedMoc : m));
+      setSelectedMoc(updatedMoc);
+      
+      if (newStatus === MOCStatus.APPROVED) alert("MDC Aprobado.");
+      if (newStatus === MOCStatus.REJECTED) alert("MDC Rechazado.");
+      if (newStatus === MOCStatus.EXECUTION) alert("MDC en Ejecución.");
+      if (newStatus === MOCStatus.COMPLETED) {
+          alert("MDC Finalizado.");
+          setView('board');
+      }
+    } catch (error: any) {
+      console.error(error);
+      alert("Error al actualizar estado: " + error.message);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -200,7 +227,6 @@ const MOC = () => {
   };
 
   const getUserName = (id: string) => {
-    // Try to find in loaded users, fallback to ID if not found yet (e.g. if list loading)
     const u = usersLookup.find(u => u.id === id);
     return u ? `${u.firstName} ${u.lastName}` : id;
   };
@@ -335,7 +361,8 @@ const MOC = () => {
              <div>
                 <label className="block text-xs font-bold text-slate-500 mb-2 uppercase">Sectores Involucrados (Selección múltiple)</label>
                 <div className="flex flex-wrap gap-2">
-                  {MOCK_AREAS.map(a => (
+                  {areasLookup.length === 0 && <span className="text-sm text-slate-400">Cargando sectores...</span>}
+                  {areasLookup.map(a => (
                     <button
                       key={a.id}
                       type="button"
@@ -394,8 +421,8 @@ const MOC = () => {
           </div>
 
           <div className="flex justify-end pt-4">
-             <button type="submit" className="bg-brand-800 text-white px-8 py-3 rounded-lg font-bold shadow-lg hover:bg-brand-900 flex items-center gap-2">
-               <Send size={18} /> Crear MDC (Pendiente)
+             <button type="submit" disabled={isLoading} className="bg-brand-800 text-white px-8 py-3 rounded-lg font-bold shadow-lg hover:bg-brand-900 flex items-center gap-2 disabled:opacity-50">
+               {isLoading ? <Loader2 className="animate-spin" /> : <><Send size={18} /> Crear MDC (Pendiente)</>}
              </button>
           </div>
 
@@ -425,27 +452,27 @@ const MOC = () => {
         <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex flex-wrap gap-3 items-center justify-end">
            {isApprover && selectedMoc.status === MOCStatus.PENDING && (
              <>
-               <button onClick={() => updateStatus(selectedMoc, MOCStatus.REJECTED)} 
-                 className="px-4 py-2 bg-white border border-red-300 text-red-700 font-bold rounded hover:bg-red-50">
+               <button onClick={() => updateStatus(selectedMoc, MOCStatus.REJECTED)} disabled={isLoading}
+                 className="px-4 py-2 bg-white border border-red-300 text-red-700 font-bold rounded hover:bg-red-50 disabled:opacity-50">
                  Rechazar
                </button>
-               <button onClick={() => updateStatus(selectedMoc, MOCStatus.APPROVED)} 
-                 className="px-4 py-2 bg-green-600 text-white font-bold rounded hover:bg-green-700 shadow-sm">
+               <button onClick={() => updateStatus(selectedMoc, MOCStatus.APPROVED)} disabled={isLoading}
+                 className="px-4 py-2 bg-green-600 text-white font-bold rounded hover:bg-green-700 shadow-sm disabled:opacity-50">
                  Aprobar Cambio
                </button>
              </>
            )}
 
            {isRequester && selectedMoc.status === MOCStatus.APPROVED && (
-               <button onClick={() => updateStatus(selectedMoc, MOCStatus.EXECUTION)} 
-                 className="px-4 py-2 bg-purple-600 text-white font-bold rounded hover:bg-purple-700 shadow-sm">
+               <button onClick={() => updateStatus(selectedMoc, MOCStatus.EXECUTION)} disabled={isLoading}
+                 className="px-4 py-2 bg-purple-600 text-white font-bold rounded hover:bg-purple-700 shadow-sm disabled:opacity-50">
                  Iniciar Ejecución (Difusión)
                </button>
            )}
 
            {isRequester && selectedMoc.status === MOCStatus.EXECUTION && (
-               <button onClick={() => updateStatus(selectedMoc, MOCStatus.COMPLETED)} 
-                 className="px-4 py-2 bg-brand-800 text-white font-bold rounded hover:bg-brand-900 shadow-sm">
+               <button onClick={() => updateStatus(selectedMoc, MOCStatus.COMPLETED)} disabled={isLoading}
+                 className="px-4 py-2 bg-brand-800 text-white font-bold rounded hover:bg-brand-900 shadow-sm disabled:opacity-50">
                  Finalizar MDC
                </button>
            )}
@@ -476,7 +503,6 @@ const MOC = () => {
                   <p className="font-medium text-slate-800">{getUserName(selectedMoc.approverId)}</p>
                </div>
             </div>
-            {/* ... rest of detail view ... */}
              <div className="pt-6 border-t border-slate-100">
                 <h3 className="text-xs font-bold text-slate-400 uppercase mb-2">Detalle del Cambio</h3>
                 <p className="text-slate-700 leading-relaxed bg-slate-50 p-4 rounded-lg border border-slate-100">
@@ -575,6 +601,8 @@ const MOC = () => {
                  </h3>
               </div>
               <div className="p-3 space-y-3 flex-1 overflow-y-auto">
+                 {isLoading && idx === 0 && mocs.length === 0 ? <div className="p-4 text-center"><Loader2 className="animate-spin mx-auto text-slate-400" /></div> : null}
+                 
                  {mocs.filter(m => col.status.includes(m.status)).map(moc => {
                     if (col.filter && !col.filter(moc)) return null;
                     return (

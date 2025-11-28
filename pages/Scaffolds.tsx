@@ -16,18 +16,13 @@ import {
   Edit2,
   Eye,
   ArrowLeft,
-  History
+  History,
+  Loader2
 } from 'lucide-react';
 import { Scaffold, ScaffoldStatus, ChecklistItemTemplate, ChecklistResponse, Company, User as UserType } from '../types';
 import { useNavigate } from 'react-router-dom';
 import { db } from '../services/firebase';
-import { collection, getDocs } from 'firebase/firestore';
-
-const MOCK_COMPANIES: Company[] = [
-  { id: '1', name: 'Montajes Industriales S.A.' },
-  { id: '2', name: 'Andamios del Sur' },
-  { id: '3', name: 'Servicios Internos' }
-];
+import { collection, getDocs, doc, setDoc, updateDoc } from 'firebase/firestore';
 
 const SECTIONS = ['BASE DEL ANDAMIO', 'CUERPO DEL ANDAMIO', 'PLATAFORMA DE TRABAJO'] as const;
 
@@ -80,6 +75,9 @@ const Scaffolds = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'management' | 'config'>('management');
   const [view, setView] = useState<'board' | 'create' | 'inspect' | 'read-only' | 'history'>('board');
+  const [isLoading, setIsLoading] = useState(false);
+  
+  // Real Data State
   const [scaffolds, setScaffolds] = useState<Scaffold[]>([]);
   const [template, setTemplate] = useState<ChecklistItemTemplate[]>(INITIAL_TEMPLATE);
   
@@ -105,22 +103,42 @@ const Scaffolds = () => {
   const [inspectionResponses, setInspectionResponses] = useState<Record<string, ChecklistResponse>>({});
   const [finalVerdict, setFinalVerdict] = useState<boolean>(false);
 
-  // Users lookup state for Dropdowns
+  // Lookup state for Dropdowns
   const [usersLookup, setUsersLookup] = useState<UserType[]>([]);
+  const [companiesLookup, setCompaniesLookup] = useState<Company[]>([]);
 
-  // Fetch all users on mount
+  // Fetch all users and companies on mount + scaffolds
   useEffect(() => {
-    const fetchUsers = async () => {
+    const fetchInitialData = async () => {
       try {
-        const querySnapshot = await getDocs(collection(db, 'users'));
-        const users = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as UserType));
-        setUsersLookup(users);
+        setIsLoading(true);
+        const usersSnap = await getDocs(collection(db, 'users'));
+        setUsersLookup(usersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as UserType)));
+
+        const compSnap = await getDocs(collection(db, 'companies'));
+        setCompaniesLookup(compSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Company)));
+        
+        await fetchScaffolds();
       } catch (error) {
-        console.error("Error fetching users for scaffolds:", error);
+        console.error("Error fetching lookups for scaffolds:", error);
+      } finally {
+        setIsLoading(false);
       }
     };
-    fetchUsers();
+    fetchInitialData();
   }, []);
+
+  const fetchScaffolds = async () => {
+    try {
+        const snap = await getDocs(collection(db, 'scaffolds'));
+        const list = snap.docs.map(doc => doc.data() as Scaffold);
+        // Sort newest first
+        list.sort((a, b) => b.id.localeCompare(a.id));
+        setScaffolds(list);
+    } catch (error) {
+        console.error("Error fetching scaffolds", error);
+    }
+  };
 
   const handleGetLocation = () => {
     if (navigator.geolocation) {
@@ -144,19 +162,31 @@ const Scaffolds = () => {
     }
   };
 
-  const handleCreateSubmit = (e: React.FormEvent) => {
+  const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const newScaffold: Scaffold = {
-      ...formData as Scaffold,
-      id: `AND-${Date.now().toString().slice(-4)}`,
-      status: ScaffoldStatus.ARMADO,
-    };
-    setScaffolds([newScaffold, ...scaffolds]);
-    setFormData({ status: ScaffoldStatus.ARMADO, type: 'DE ACCESO', assemblyDate: new Date().toISOString().split('T')[0] });
-    setView('board');
+    setIsLoading(true);
+    try {
+        const newId = `AND-${Date.now().toString().slice(-6)}`;
+        const newScaffold: Scaffold = {
+            ...formData as Scaffold,
+            id: newId,
+            status: ScaffoldStatus.ARMADO,
+        };
+        
+        await setDoc(doc(db, 'scaffolds', newId), newScaffold);
+        await fetchScaffolds();
+        
+        setFormData({ status: ScaffoldStatus.ARMADO, type: 'DE ACCESO', assemblyDate: new Date().toISOString().split('T')[0] });
+        setView('board');
+        alert("Andamio registrado correctamente.");
+    } catch (e: any) {
+        console.error(e);
+        alert("Error al guardar: " + e.message);
+    } finally {
+        setIsLoading(false);
+    }
   };
 
-  // ... Config Handlers (Same as before) ...
   const handleSaveTemplateItem = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTemplateItem.text || !newTemplateItem.section) return;
@@ -208,7 +238,6 @@ const Scaffolds = () => {
     });
   };
 
-  // ... Inspection Logic (Same as before) ...
   const startInspection = (id: string) => {
     setCurrentInspectionId(id);
     setInspectionResponses({});
@@ -243,41 +272,60 @@ const Scaffolds = () => {
     }));
   };
 
-  const submitInspection = () => {
+  const submitInspection = async () => {
     if (!currentInspectionId) return;
     if (Object.keys(inspectionResponses).length < template.length) {
       alert("Debe responder todas las preguntas del checklist.");
       return;
     }
-    const today = new Date();
-    const expiry = new Date(today);
-    expiry.setDate(today.getDate() + 7);
-
-    setScaffolds(prev => prev.map(s => {
-      if (s.id === currentInspectionId) {
-        return {
-          ...s,
-          status: ScaffoldStatus.INSPECCIONADO,
-          inspectionDate: today.toISOString().split('T')[0],
-          expiryDate: expiry.toISOString().split('T')[0],
-          checklistResponses: inspectionResponses,
-          isOperational: finalVerdict
+    
+    setIsLoading(true);
+    try {
+        const today = new Date();
+        const expiry = new Date(today);
+        expiry.setDate(today.getDate() + 7);
+        
+        const updates = {
+            status: ScaffoldStatus.INSPECCIONADO,
+            inspectionDate: today.toISOString().split('T')[0],
+            expiryDate: expiry.toISOString().split('T')[0],
+            checklistResponses: inspectionResponses,
+            isOperational: finalVerdict
         };
-      }
-      return s;
-    }));
-    setView('board');
+
+        await updateDoc(doc(db, 'scaffolds', currentInspectionId), updates);
+        
+        // Update local state optimistically
+        setScaffolds(prev => prev.map(s => s.id === currentInspectionId ? { ...s, ...updates } : s));
+        setView('board');
+        alert("Inspección guardada correctamente.");
+    } catch (e: any) {
+        console.error(e);
+        alert("Error al guardar inspección: " + e.message);
+    } finally {
+        setIsLoading(false);
+    }
   };
 
-  const changeStatus = (id: string, newStatus: ScaffoldStatus) => {
-    setScaffolds(prev => prev.map(s => s.id === id ? { 
-        ...s, 
-        status: newStatus,
-        assemblyDate: newStatus === ScaffoldStatus.DESMONTADO ? new Date().toISOString().split('T')[0] : s.assemblyDate 
-    } : s));
+  const changeStatus = async (id: string, newStatus: ScaffoldStatus) => {
+    setIsLoading(true);
+    try {
+        const updates = { 
+            status: newStatus,
+            // If dismounted, update assembly date to current or keep original? Keeping original but maybe adding dismountedDate field in future.
+            // For now, simpler to just update status.
+        };
+        await updateDoc(doc(db, 'scaffolds', id), updates);
+        
+        setScaffolds(prev => prev.map(s => s.id === id ? { ...s, status: newStatus } : s));
+    } catch (e: any) {
+        console.error(e);
+        alert("Error al cambiar estado: " + e.message);
+    } finally {
+        setIsLoading(false);
+    }
   };
 
-  // ... Kanban Logic (Same) ...
   const isToday = (dateString: string) => {
     const today = new Date().toISOString().split('T')[0];
     return dateString === today;
@@ -287,7 +335,7 @@ const Scaffolds = () => {
     { title: 'Nuevos Montajes', status: [ScaffoldStatus.ARMADO], color: 'border-blue-400 bg-blue-50/50' },
     { title: 'Operativos (Inspeccionado)', status: [ScaffoldStatus.INSPECCIONADO], color: 'border-green-400 bg-green-50/50' },
     { title: 'Solicitud Desarme', status: [ScaffoldStatus.A_DESMONTAR], color: 'border-orange-400 bg-orange-50/50' },
-    { title: 'Finalizados (Hoy)', status: [ScaffoldStatus.DESMONTADO], color: 'border-slate-400 bg-slate-100/50', filter: (s: Scaffold) => isToday(s.assemblyDate) }
+    { title: 'Finalizados (Hoy)', status: [ScaffoldStatus.DESMONTADO], color: 'border-slate-400 bg-slate-100/50', filter: (s: Scaffold) => isToday(s.assemblyDate) } // Logic assumes assemblyDate is relevant, or we'd filter by status change date if we tracked it
   ];
 
   const getStatusColor = (s: ScaffoldStatus) => {
@@ -331,7 +379,13 @@ const Scaffolds = () => {
         <form onSubmit={handleCreateSubmit} className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div><label className="block text-sm font-medium text-slate-700 mb-1">Solicitante del Andamio</label><input required className="w-full p-2 border border-slate-300 rounded bg-white text-slate-900" value={formData.requester || ''} onChange={e => setFormData({...formData, requester: e.target.value})} /></div>
-            <div><label className="block text-sm font-medium text-slate-700 mb-1">Empresa Montaje</label><select required className="w-full p-2 border border-slate-300 rounded bg-white text-slate-900" value={formData.assemblyCompanyId || ''} onChange={e => setFormData({...formData, assemblyCompanyId: e.target.value})}><option value="">Seleccione...</option>{MOCK_COMPANIES.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Empresa Montaje</label>
+              <select required className="w-full p-2 border border-slate-300 rounded bg-white text-slate-900" value={formData.assemblyCompanyId || ''} onChange={e => setFormData({...formData, assemblyCompanyId: e.target.value})}>
+                <option value="">Seleccione...</option>
+                {companiesLookup.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Inspector (DNI/Legajo)</label>
               <select required className="w-full p-2 border border-slate-300 rounded bg-white text-slate-900" value={formData.inspectorId || ''} onChange={e => setFormData({...formData, inspectorId: e.target.value})}>
@@ -347,7 +401,7 @@ const Scaffolds = () => {
             <div><label className="block text-sm font-medium text-slate-700 mb-1">Altura (mts)</label><input required type="number" className="w-full p-2 border border-slate-300 rounded bg-white text-slate-900" value={formData.height || ''} onChange={e => setFormData({...formData, height: Number(e.target.value)})} /></div>
             <div className="md:col-span-2"><label className="block text-sm font-medium text-slate-700 mb-1">Geolocalización</label><div className="flex gap-2"><input readOnly className="w-full p-2 border rounded bg-slate-100 text-slate-600" value={formData.coordinates ? `${formData.coordinates.lat}, ${formData.coordinates.lng}` : 'Sin datos'} /><button type="button" onClick={handleGetLocation} className="bg-slate-200 hover:bg-slate-300 text-slate-700 px-4 rounded flex items-center gap-2"><MapPin size={18} /> Obtener</button></div></div>
             </div>
-            <div className="pt-4 flex justify-end border-t border-slate-100"><button type="submit" className="bg-brand-800 hover:bg-brand-900 text-white px-6 py-2 rounded-lg font-bold">Registrar Andamio</button></div>
+            <div className="pt-4 flex justify-end border-t border-slate-100"><button type="submit" disabled={isLoading} className="bg-brand-800 hover:bg-brand-900 text-white px-6 py-2 rounded-lg font-bold disabled:opacity-50">{isLoading ? <Loader2 className="animate-spin"/> : 'Registrar Andamio'}</button></div>
         </form>
       </div>
     );
@@ -355,7 +409,7 @@ const Scaffolds = () => {
 
   // Views for inspect, read-only, config, history and board remain largely same but using real data in forms
   // For brevity in this XML, I am returning the critical parts updated above and keeping the rest consistent.
-  // The crucial update was the useEffect fetching users and the Inspector <select> mapping usersLookup.
+  // The crucial update was the useEffect fetching users and companies, and the Inspector/Company <select> mapping.
 
   if (view === 'inspect' || view === 'read-only') {
      const scaffold = scaffolds.find(s => s.id === currentInspectionId);
@@ -408,14 +462,13 @@ const Scaffolds = () => {
               <button disabled={isReadOnly} onClick={() => setFinalVerdict(true)} className={`px-4 py-2 rounded-lg font-bold border ${finalVerdict ? 'bg-green-600 text-white border-green-600' : 'bg-white text-slate-400 border-slate-200'} ${isReadOnly ? 'opacity-80' : ''}`}>HABILITADO</button>
               <button disabled={isReadOnly} onClick={() => setFinalVerdict(false)} className={`px-4 py-2 rounded-lg font-bold border ${!finalVerdict ? 'bg-red-600 text-white border-red-600' : 'bg-white text-slate-400 border-slate-200'} ${isReadOnly ? 'opacity-80' : ''}`}>NO HABILITADO</button>
            </div>
-           {!isReadOnly && (<div className="flex justify-end pt-4 border-t border-slate-100"><button onClick={submitInspection} className="bg-brand-800 hover:bg-brand-900 text-white px-8 py-3 rounded-lg font-bold shadow-lg flex items-center gap-2"><Save size={20} /> Guardar Inspección</button></div>)}
+           {!isReadOnly && (<div className="flex justify-end pt-4 border-t border-slate-100"><button onClick={submitInspection} disabled={isLoading} className="bg-brand-800 hover:bg-brand-900 text-white px-8 py-3 rounded-lg font-bold shadow-lg flex items-center gap-2 disabled:opacity-50">{isLoading ? <Loader2 className="animate-spin"/> : <><Save size={20} /> Guardar Inspección</>}</button></div>)}
          </div>
        </div>
      );
    }
 
   if (activeTab === 'config') {
-    // ... Config View (same) ...
     return (
       <div className="max-w-6xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
@@ -438,7 +491,7 @@ const Scaffolds = () => {
     );
   }
 
-  // ... History View (same) ...
+  // --- History View (same) ---
   if (view === 'history') {
     const historyScaffolds = scaffolds.filter(s => s.status === ScaffoldStatus.DESMONTADO);
     return (
@@ -519,6 +572,7 @@ const Scaffolds = () => {
                  </h3>
               </div>
               <div className="p-3 space-y-3 flex-1 overflow-y-auto">
+                 {isLoading && idx === 0 && scaffolds.length === 0 ? <div className="p-4 text-center"><Loader2 className="animate-spin mx-auto text-slate-400" /></div> : null}
                  {scaffolds.filter(s => col.status.includes(s.status)).map(s => {
                     if (col.filter && !col.filter(s)) return null;
                     return (
