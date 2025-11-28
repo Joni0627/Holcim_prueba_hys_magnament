@@ -1,46 +1,69 @@
-import React, { useState } from 'react';
-import { PlayCircle, FileText, CheckCircle, Clock, AlertCircle } from 'lucide-react';
-import { TrainingModule } from '../types';
 
-const MOCK_TRAININGS: TrainingModule[] = [
-  { id: '1', title: 'Trabajo en Altura - Nivel 1', description: 'Fundamentos de seguridad para trabajos sobre 1.8m', duration: '45 min', status: 'completed', dueDate: '2023-12-01' },
-  { id: '2', title: 'Espacios Confinados', description: 'Procedimientos de entrada y rescate básico', duration: '60 min', status: 'pending', dueDate: '2023-11-15' },
-  { id: '3', title: 'Bloqueo y Etiquetado (LOTO)', description: 'Control de energías peligrosas', duration: '30 min', status: 'failed', dueDate: '2023-10-30' },
+import React, { useState, useMemo } from 'react';
+import { PlayCircle, FileText, CheckCircle, Clock, AlertCircle, Award, CheckSquare, Layers, Video, Lock, ClipboardCheck, UserCheck, ArrowLeft, RotateCcw } from 'lucide-react';
+import { Course, Evaluation, Question, UserTrainingProgress, QuizAttempt } from '../types';
+import { INITIAL_COURSES, INITIAL_EVALUATIONS, INITIAL_PLANS } from './MasterData';
+import { useNavigate } from 'react-router-dom';
+
+// --- MOCK USER CONTEXT ---
+const CURRENT_USER_POSITION = "OPERARIO DE PRODUCCION - AFR";
+const CURRENT_USER_ID = "27334";
+
+// --- MOCK PROGRESS DB ---
+const MOCK_PROGRESS: UserTrainingProgress[] = [
+  // Example: User has viewed material for Course 1 but not passed exam yet
+  { userId: '27334', courseId: '1', status: 'PENDING', materialViewed: false, attempts: [] }
 ];
 
-const Quiz = ({ onFinish }: { onFinish: (passed: boolean) => void }) => {
+const Quiz = ({ evaluation, onFinish }: { evaluation: Evaluation, onFinish: (passed: boolean, score: number, wrongIds: string[]) => void }) => {
   const [step, setStep] = useState(0);
-  const [score, setScore] = useState(0);
+  const [answers, setAnswers] = useState<number[]>([]);
 
-  const questions = [
-    { q: "¿Cuál es la altura mínima para considerar trabajo en altura?", options: ["1.5 metros", "1.8 metros", "2.0 metros"], correct: 1 },
-    { q: "¿Qué debe revisarse antes de usar un arnés?", options: ["El color", "Costuras y hebillas", "La marca"], correct: 1 },
-  ];
-
-  const handleAnswer = (idx: number) => {
-    const isCorrect = idx === questions[step].correct;
-    if (isCorrect) setScore(s => s + 1);
-    
-    if (step < questions.length - 1) {
-      setStep(s => s + 1);
+  const handleAnswer = (optionIndex: number) => {
+    const newAnswers = [...answers, optionIndex];
+    if (step < evaluation.questions.length - 1) {
+      setAnswers(newAnswers);
+      setStep(step + 1);
     } else {
-      // Finish
-      const finalScore = isCorrect ? score + 1 : score;
-      onFinish(finalScore === questions.length);
+      // Calculate Score
+      const wrongIds: string[] = [];
+      let correctCount = 0;
+      
+      newAnswers.forEach((ans, idx) => {
+        if (ans === evaluation.questions[idx].correctIndex) {
+          correctCount++;
+        } else {
+          wrongIds.push(evaluation.questions[idx].id);
+        }
+      });
+
+      const finalScore = (correctCount / evaluation.questions.length) * 100;
+      const passed = finalScore >= evaluation.passingScore;
+      onFinish(passed, finalScore, wrongIds);
     }
   };
 
+  const q = evaluation.questions[step];
+
   return (
-    <div className="bg-white p-6 rounded-xl shadow-lg border border-slate-200 max-w-lg mx-auto">
-      <h3 className="text-xl font-bold mb-4">Evaluación de Conocimientos</h3>
-      <div className="mb-4 text-sm text-slate-500">Pregunta {step + 1} de {questions.length}</div>
-      <p className="text-lg font-medium mb-6">{questions[step].q}</p>
-      <div className="space-y-3">
-        {questions[step].options.map((opt, i) => (
+    <div className="bg-white p-8 rounded-xl shadow-lg border border-slate-200 max-w-2xl mx-auto">
+      <div className="mb-6 flex justify-between items-center">
+         <h3 className="text-2xl font-bold text-brand-800">{evaluation.name}</h3>
+         <span className="text-sm font-bold text-slate-400">Pregunta {step + 1} de {evaluation.questions.length}</span>
+      </div>
+      
+      <div className="w-full bg-slate-100 h-2 rounded-full mb-8">
+         <div className="bg-brand-500 h-2 rounded-full transition-all duration-300" style={{ width: `${((step)/evaluation.questions.length)*100}%` }}></div>
+      </div>
+
+      <p className="text-lg font-medium mb-8 text-slate-800">{q.text}</p>
+      
+      <div className="space-y-4">
+        {q.options.map((opt, i) => (
           <button 
             key={i}
             onClick={() => handleAnswer(i)}
-            className="w-full text-left p-3 rounded-lg border border-slate-200 hover:bg-safety-50 hover:border-safety-300 transition-colors"
+            className="w-full text-left p-4 rounded-xl border-2 border-slate-100 hover:border-brand-500 hover:bg-brand-50 transition-all font-medium text-slate-700"
           >
             {opt}
           </button>
@@ -50,97 +73,467 @@ const Quiz = ({ onFinish }: { onFinish: (passed: boolean) => void }) => {
   );
 };
 
+interface CourseGroup {
+  key: string;
+  evaluation?: Evaluation;
+  courses: Course[];
+  isCompleted: boolean;
+  isPendingPractical: boolean;
+  canTakeExam: boolean;
+}
+
 const Training = () => {
-  const [activeModule, setActiveModule] = useState<TrainingModule | null>(null);
+  const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState<'my-training' | 'hs-validation'>('my-training');
+  const [activeCourse, setActiveCourse] = useState<Course | null>(null);
   const [viewMode, setViewMode] = useState<'details' | 'quiz' | null>(null);
+  const [activeGroupKey, setActiveGroupKey] = useState<string | null>(null);
+  const [myProgress, setMyProgress] = useState<UserTrainingProgress[]>(MOCK_PROGRESS);
 
-  const startTraining = (t: TrainingModule) => {
-    setActiveModule(t);
-    setViewMode('details');
-  };
+  // Toggle for Demo Roles
+  const [demoRole, setDemoRole] = useState<'Operario' | 'H&S'>('Operario');
 
-  const finishQuiz = (passed: boolean) => {
-    alert(passed ? "¡Aprobado! Certificado generado." : "Reprobado. Debe repasar el material.");
-    setActiveModule(null);
+  // 1. Find User's Plan based on Position
+  const myPlan = INITIAL_PLANS.find(p => p.positionIds.includes(CURRENT_USER_POSITION));
+  
+  // 2. Get Courses from that Plan
+  const myCourses = myPlan ? INITIAL_COURSES.filter(c => myPlan.courseIds.includes(c.id)) : [];
+
+  // 3. Group Courses by Evaluation ID
+  const groupedCourses: CourseGroup[] = useMemo(() => {
+    const groups: Record<string, Course[]> = {};
+    
+    myCourses.forEach(c => {
+      // If course has evaluation, group by it. If not, use unique ID to keep separate.
+      const key = c.evaluationId || `no-eval-${c.id}`;
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(c);
+    });
+
+    return Object.keys(groups).map(key => {
+      const groupCourses = groups[key];
+      // Find evaluation object if ID exists
+      const evaluation = INITIAL_EVALUATIONS.find(e => e.id === groupCourses[0].evaluationId);
+      
+      // Check group status
+      const allCompleted = groupCourses.every(c => {
+        const p = myProgress.find(mp => mp.courseId === c.id);
+        return p?.status === 'COMPLETED';
+      });
+
+      // Check pending practical
+      const hasPendingPractical = groupCourses.some(c => {
+        const p = myProgress.find(mp => mp.courseId === c.id);
+        return p?.status === 'PENDING_PRACTICAL';
+      });
+
+      // Check if materials are viewed for all courses in group
+      const allMaterialsViewed = groupCourses.every(c => {
+        const p = myProgress.find(mp => mp.courseId === c.id);
+        return p?.materialViewed === true;
+      });
+
+      return {
+        key,
+        evaluation,
+        courses: groupCourses,
+        isCompleted: allCompleted,
+        isPendingPractical: hasPendingPractical,
+        canTakeExam: allMaterialsViewed && !allCompleted && !hasPendingPractical && !!evaluation
+      };
+    });
+  }, [myCourses, myProgress]);
+
+  // --- ACTIONS ---
+
+  const handleVideoComplete = () => {
+    if (!activeCourse) return;
+    
+    // Mark material as viewed
+    setMyProgress(prev => {
+      const existing = prev.find(p => p.courseId === activeCourse.id);
+      if (existing) {
+        return prev.map(p => p.courseId === activeCourse.id ? { ...p, materialViewed: true } : p);
+      } else {
+        return [...prev, { userId: CURRENT_USER_ID, courseId: activeCourse.id, status: 'PENDING', materialViewed: true, attempts: [] }];
+      }
+    });
+
+    alert("Material completado. Se ha registrado su progreso.");
+    setActiveCourse(null);
     setViewMode(null);
   };
 
-  if (activeModule && viewMode === 'details') {
+  const handleFinishQuiz = (passed: boolean, score: number, wrongIds: string[]) => {
+    if (!activeGroupKey) return;
+
+    const group = groupedCourses.find(g => g.key === activeGroupKey);
+    if (!group) return;
+    
+    const attempt: QuizAttempt = {
+      date: new Date().toISOString(),
+      score,
+      passed,
+      wrongQuestionIds: wrongIds
+    };
+
+    if (!passed) {
+        // Record failed attempt
+        setMyProgress(prev => {
+           // We need to update attempts for at least one course in the group to track history
+           // For simplicity, we update all of them or just attach to the first one found
+           // Logic: Find progress for courses in group, if exists, append attempt.
+           const courseIds = group.courses.map(c => c.id);
+           return prev.map(p => {
+             if (courseIds.includes(p.courseId)) {
+               return { ...p, attempts: [...(p.attempts || []), attempt] };
+             }
+             return p;
+           });
+        });
+
+        alert(`Reprobado (${score.toFixed(0)}%). Debe reintentar. Se ha registrado el intento fallido.`);
+        return;
+    }
+
+    alert(`¡Teórico Aprobado con ${score.toFixed(0)}%!`);
+    
+    const completionDate = new Date().toLocaleDateString();
+
+    // Update ALL courses in this group
+    setMyProgress(prev => {
+      // Remove old entries for these courses to replace them clean, OR merge logic
+      // Better to merge to keep attempt history
+      const courseIds = group.courses.map(c => c.id);
+      
+      return prev.map(p => {
+         if (courseIds.includes(p.courseId)) {
+           const course = group.courses.find(gc => gc.id === p.courseId);
+           const status: 'PENDING_PRACTICAL' | 'COMPLETED' = course?.requiresPractical ? 'PENDING_PRACTICAL' : 'COMPLETED';
+           return {
+              ...p,
+              status,
+              score,
+              completionDate: status === 'COMPLETED' ? completionDate : undefined,
+              attempts: [...(p.attempts || []), attempt]
+           };
+         }
+         return p;
+      }).concat(
+        // Add entries for courses that didn't exist in progress yet (edge case if material wasn't viewed but exam taken? logic prevents this but good safety)
+        group.courses.filter(c => !prev.some(p => p.courseId === c.id)).map(c => {
+            const status: 'PENDING_PRACTICAL' | 'COMPLETED' = c.requiresPractical ? 'PENDING_PRACTICAL' : 'COMPLETED';
+            return {
+                userId: CURRENT_USER_ID,
+                courseId: c.id,
+                status,
+                score,
+                completionDate: status === 'COMPLETED' ? completionDate : undefined,
+                materialViewed: true,
+                attempts: [attempt]
+            };
+        })
+      );
+    });
+
+    setActiveGroupKey(null);
+    setViewMode(null);
+  };
+
+  const handleValidatePractical = (courseId: string) => {
+    if (confirm("¿Confirma que el operario ha aprobado la instancia práctica?")) {
+        setMyProgress(prev => prev.map(p => {
+            if (p.courseId === courseId && p.status === 'PENDING_PRACTICAL') {
+                return { 
+                    ...p, 
+                    status: 'COMPLETED', 
+                    completionDate: new Date().toLocaleDateString(),
+                    practicalValidatedBy: 'ADMIN_HS',
+                    practicalValidatedAt: new Date().toISOString()
+                };
+            }
+            return p;
+        }));
+    }
+  };
+
+  const startCourseMaterial = (c: Course) => {
+    setActiveCourse(c);
+    setViewMode('details');
+  };
+
+  const startGroupExam = (groupKey: string) => {
+    setActiveGroupKey(groupKey);
+    setViewMode('quiz');
+  };
+
+  // --- RENDERERS ---
+
+  if (activeCourse && viewMode === 'details') {
     return (
-      <div className="max-w-4xl mx-auto">
-        <button onClick={() => { setActiveModule(null); setViewMode(null); }} className="text-slate-500 hover:text-slate-900 mb-4">
-          ← Volver a mis cursos
+      <div className="max-w-4xl mx-auto animate-fade-in">
+        <button onClick={() => { setActiveCourse(null); setViewMode(null); }} className="text-slate-500 hover:text-slate-900 mb-6 flex items-center gap-2 font-medium">
+          <ArrowLeft size={20} /> Volver a mis capacitaciones
         </button>
-        <div className="bg-black aspect-video rounded-xl flex items-center justify-center mb-6 shadow-xl">
-           <PlayCircle size={64} className="text-white opacity-80" />
+        
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+            {/* Video Placeholder */}
+            <div className="bg-black aspect-video flex items-center justify-center relative group">
+                <PlayCircle size={80} className="text-white opacity-90" />
+                <p className="absolute bottom-4 text-white text-sm font-medium opacity-70">Simulación de Reproductor de Video</p>
+            </div>
+            
+            <div className="p-8">
+                <div className="flex justify-between items-start mb-6">
+                    <div>
+                        <h2 className="text-3xl font-bold text-slate-800 mb-2">{activeCourse.title}</h2>
+                        <p className="text-slate-500">{activeCourse.description}</p>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 mt-8 pt-8 border-t border-slate-100">
+                    <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
+                        <h4 className="font-bold text-slate-700 mb-2 flex items-center gap-2"><Clock size={18}/> Duración Estimada</h4>
+                        <p className="text-slate-600">45 Minutos</p>
+                    </div>
+                    {activeCourse.contentUrl && (
+                        <div className="p-4 bg-blue-50 rounded-xl border border-blue-100 col-span-2">
+                           <h4 className="font-bold text-blue-800 mb-2 flex items-center gap-2"><FileText size={18}/> Material Externo</h4>
+                           <a href={activeCourse.contentUrl} target="_blank" rel="noreferrer" className="text-blue-600 underline text-sm break-all">{activeCourse.contentUrl}</a>
+                        </div>
+                    )}
+                </div>
+
+                <div className="mt-8 flex justify-end">
+                   <button 
+                     onClick={handleVideoComplete}
+                     className="bg-brand-800 text-white px-6 py-3 rounded-lg font-bold shadow-lg hover:bg-brand-900 flex items-center gap-2"
+                   >
+                     <CheckCircle size={20} /> Finalizar Material / Marcar como Visto
+                   </button>
+                </div>
+            </div>
         </div>
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold">{activeModule.title}</h2>
-          <button 
-            onClick={() => setViewMode('quiz')}
-            className="bg-safety-600 hover:bg-safety-700 text-white px-6 py-2 rounded-lg font-bold"
-          >
-            Realizar Evaluación
-          </button>
-        </div>
-        <div className="prose max-w-none text-slate-600">
-          <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>
-          <h3 className="font-bold text-slate-800 mt-4">Material de Lectura</h3>
-          <div className="flex items-center gap-2 text-blue-600 cursor-pointer mt-2">
-            <FileText size={20} />
-            <span>Manual_Procedimiento_v2.pdf</span>
+      </div>
+    );
+  }
+
+  if (viewMode === 'quiz' && activeGroupKey) {
+    const group = groupedCourses.find(g => g.key === activeGroupKey);
+    if (!group || !group.evaluation) return <div>Error: Evaluación no encontrada</div>;
+
+    return (
+      <div className="py-12 animate-fade-in">
+        <button onClick={() => { setActiveGroupKey(null); setViewMode(null); }} className="text-slate-500 hover:text-slate-900 mb-6 flex items-center gap-2 font-medium mx-auto max-w-2xl block">
+          <ArrowLeft size={20} /> Cancelar Examen
+        </button>
+        <Quiz evaluation={group.evaluation} onFinish={handleFinishQuiz} />
+      </div>
+    );
+  }
+
+  // Calculate pending items for HS view
+  const pendingPracticalItems = myProgress.filter(p => p.status === 'PENDING_PRACTICAL');
+
+  // --- MAIN USER VIEW ---
+  return (
+    <div className="space-y-8">
+       {/* Module Header with Back Button */}
+       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div className="flex items-center gap-3">
+            <button onClick={() => navigate('/')} className="bg-white p-2 rounded-full border border-slate-200 text-slate-500 hover:text-brand-800 hover:border-brand-300 transition-colors">
+              <ArrowLeft size={20} />
+            </button>
+            <div>
+              <h2 className="text-2xl font-bold text-slate-800">
+                {activeTab === 'my-training' ? 'Mis Capacitaciones' : 'Validación Práctica H&S'}
+              </h2>
+              {activeTab === 'my-training' && (
+                <p className="text-slate-500">Plan: <span className="font-semibold text-brand-700">{myPlan?.name || 'Sin plan asignado'}</span></p>
+              )}
+               {activeTab === 'hs-validation' && (
+                   <p className="text-slate-500">Gestión de habilitaciones pendientes de práctico.</p>
+              )}
+            </div>
+          </div>
+          
+          <div className="flex gap-4 items-center">
+              {/* Role Switcher for Demo */}
+              <div className="flex gap-2 items-center bg-yellow-50 p-2 rounded border border-yellow-200">
+                 <span className="text-xs font-bold text-yellow-800">Rol: {demoRole}</span>
+                 <button onClick={() => setDemoRole(prev => prev === 'Operario' ? 'H&S' : 'Operario')} className="text-xs underline text-slate-500">Cambiar Rol (Demo)</button>
+              </div>
+
+              <div className="flex bg-white p-1 rounded-lg border border-slate-200">
+                 <button 
+                   onClick={() => setActiveTab('my-training')}
+                   className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all ${activeTab === 'my-training' ? 'bg-brand-800 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}
+                 >
+                    Mis Cursos
+                 </button>
+                 {demoRole === 'H&S' && (
+                    <button 
+                    onClick={() => setActiveTab('hs-validation')}
+                    className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all ${activeTab === 'hs-validation' ? 'bg-brand-800 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}
+                    >
+                        Gestión Práctica
+                    </button>
+                 )}
+              </div>
           </div>
         </div>
-      </div>
-    );
-  }
 
-  if (activeModule && viewMode === 'quiz') {
-    return (
-      <div className="py-12">
-        <Quiz onFinish={finishQuiz} />
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-6">
-       <div>
-          <h2 className="text-2xl font-bold text-slate-800">Mis Capacitaciones</h2>
-          <p className="text-slate-500">Plan de carrera y cumplimiento normativo.</p>
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {MOCK_TRAININGS.map((t) => (
-            <div key={t.id} className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col h-full">
-              <div className="flex justify-between items-start mb-3">
-                <div className={`p-2 rounded-lg ${t.status === 'completed' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
-                  {t.status === 'completed' ? <CheckCircle size={20} /> : <PlayCircle size={20} />}
-                </div>
-                <span className="text-xs font-semibold text-slate-400 border px-2 py-1 rounded">{t.duration}</span>
-              </div>
-              <h3 className="font-bold text-lg mb-2 text-slate-800">{t.title}</h3>
-              <p className="text-slate-500 text-sm flex-1">{t.description}</p>
-              
-              <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between">
-                <span className="text-xs text-slate-400 flex items-center gap-1">
-                  <Clock size={12} /> Vence: {t.dueDate}
-                </span>
-                {t.status !== 'completed' && (
-                  <button 
-                    onClick={() => startTraining(t)}
-                    className="text-sm font-bold text-safety-600 hover:text-safety-700 hover:underline"
-                  >
-                    {t.status === 'failed' ? 'Reintentar' : 'Iniciar'}
-                  </button>
-                )}
-                {t.status === 'completed' && (
-                  <span className="text-sm font-bold text-green-600">Completado</span>
-                )}
-              </div>
+        {activeTab === 'hs-validation' ? (
+          <div className="space-y-6 animate-fade-in">
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <table className="w-full text-left text-sm text-slate-600">
+                    <thead className="bg-slate-50 font-bold text-slate-800 border-b border-slate-200">
+                      <tr>
+                          <th className="p-4">Operario</th>
+                          <th className="p-4">Capacitación</th>
+                          <th className="p-4">Examen Teórico</th>
+                          <th className="p-4 text-right">Acción</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pendingPracticalItems.length === 0 && (
+                          <tr><td colSpan={4} className="p-8 text-center text-slate-400 italic">No hay validaciones prácticas pendientes.</td></tr>
+                      )}
+                      {pendingPracticalItems.map((item, idx) => {
+                          const course = INITIAL_COURSES.find(c => c.id === item.courseId);
+                          return (
+                            <tr key={idx} className="border-b border-slate-100 hover:bg-slate-50">
+                                <td className="p-4 font-bold text-slate-800">Juan Perez (27334)</td>
+                                <td className="p-4">{course?.title}</td>
+                                <td className="p-4 text-green-600 font-bold">Aprobado ({item.score}%)</td>
+                                <td className="p-4 text-right">
+                                  <button 
+                                    onClick={() => handleValidatePractical(item.courseId)}
+                                    className="bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-green-700 shadow-sm flex items-center gap-1 ml-auto"
+                                  >
+                                      <UserCheck size={14} /> Validar Práctica
+                                  </button>
+                                </td>
+                            </tr>
+                          );
+                      })}
+                    </tbody>
+                </table>
             </div>
-          ))}
-        </div>
+          </div>
+        ) : (
+          <>
+            {!myPlan && (
+                <div className="p-12 text-center bg-white rounded-xl border border-dashed border-slate-300">
+                    <AlertCircle className="mx-auto text-slate-300 mb-4" size={48} />
+                    <p className="text-slate-500 text-lg">No tiene un plan de capacitación asignado a su puesto actual.</p>
+                </div>
+            )}
+
+            <div className="grid gap-6">
+              {groupedCourses.map((group) => (
+                <div key={group.key} className={`bg-white rounded-2xl border shadow-sm overflow-hidden transition-all ${group.isCompleted ? 'border-green-200' : group.isPendingPractical ? 'border-orange-200' : 'border-slate-200'}`}>
+                  
+                  {/* Group Header */}
+                  <div className={`p-6 border-b flex flex-col md:flex-row justify-between items-start md:items-center gap-4 ${group.isCompleted ? 'bg-green-50/50 border-green-100' : group.isPendingPractical ? 'bg-orange-50 border-orange-100' : 'bg-slate-50 border-slate-100'}`}>
+                    <div className="flex items-center gap-4">
+                        <div className={`p-3 rounded-xl shrink-0 ${group.isCompleted ? 'bg-green-100 text-green-700' : group.isPendingPractical ? 'bg-orange-100 text-orange-700' : 'bg-brand-100 text-brand-700'}`}>
+                          {group.isCompleted ? <Award size={28} /> : group.isPendingPractical ? <ClipboardCheck size={28}/> : <Layers size={28} />}
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-bold text-slate-800">
+                              {group.evaluation ? `Módulo: ${group.evaluation.name}` : `Módulo: ${group.courses[0].title}`}
+                          </h3>
+                          <p className="text-sm text-slate-500">
+                              {group.courses.length} {group.courses.length === 1 ? 'Capacitación' : 'Capacitaciones agrupadas'}
+                          </p>
+                        </div>
+                    </div>
+
+                    <div className="flex flex-col items-end">
+                        {group.isCompleted ? (
+                          <span className="bg-green-100 text-green-800 px-4 py-1.5 rounded-full text-sm font-bold border border-green-200 flex items-center gap-2">
+                            <CheckCircle size={16}/> APROBADO
+                          </span>
+                        ) : group.isPendingPractical ? (
+                          <span className="bg-orange-100 text-orange-800 px-4 py-1.5 rounded-full text-sm font-bold border border-orange-200 flex items-center gap-2">
+                            <Clock size={16}/> PENDIENTE PRÁCTICA
+                          </span>
+                        ) : (
+                          <div className="text-right">
+                              <button 
+                                disabled={!group.canTakeExam}
+                                onClick={() => startGroupExam(group.key)}
+                                className={`
+                                    px-6 py-2.5 rounded-lg font-bold text-sm shadow-sm flex items-center gap-2 transition-all
+                                    ${group.canTakeExam 
+                                      ? 'bg-brand-800 text-white hover:bg-brand-900 hover:shadow-md' 
+                                      : 'bg-slate-200 text-slate-400 cursor-not-allowed'}
+                                `}
+                              >
+                                {group.canTakeExam ? <FileText size={18}/> : <Lock size={18}/>}
+                                {group.canTakeExam ? 'Rendir Examen Unificado' : 'Complete el material para rendir'}
+                              </button>
+                              {!group.canTakeExam && !group.isCompleted && (
+                                <p className="text-[10px] text-slate-400 mt-2 font-medium">
+                                    Vea todos los videos para habilitar el examen
+                                </p>
+                              )}
+                          </div>
+                        )}
+                    </div>
+                  </div>
+
+                  {/* Courses List inside Group */}
+                  <div className="divide-y divide-slate-100">
+                    {group.courses.map(course => {
+                        const progress = myProgress.find(p => p.courseId === course.id);
+                        const isViewed = progress?.materialViewed === true;
+                        
+                        // Logic for One-Time Lock
+                        const isLocked = course.isOneTime && progress?.status === 'COMPLETED';
+
+                        return (
+                          <div key={course.id} className={`p-4 transition-colors flex items-center justify-between group ${isLocked ? 'bg-slate-50 opacity-70' : 'hover:bg-slate-50'}`}>
+                              <div className="flex items-center gap-4">
+                                <div className={`w-10 h-10 rounded-full flex items-center justify-center border ${isViewed || isLocked ? 'bg-green-100 border-green-200 text-green-600' : 'bg-white border-slate-200 text-slate-400'}`}>
+                                    {(isViewed || isLocked) ? <CheckCircle size={20} /> : <Video size={20} />}
+                                </div>
+                                <div>
+                                    <h4 className={`font-bold ${isLocked ? 'text-slate-500' : 'text-slate-700'}`}>{course.title}</h4>
+                                    <p className="text-xs text-slate-500">{course.description}</p>
+                                    <div className="flex gap-2 mt-1">
+                                        {course.isOneTime && <span className="text-[10px] bg-purple-50 text-purple-700 border border-purple-100 px-2 py-0.5 rounded">Unica Vez</span>}
+                                        {course.requiresPractical && <span className="text-[10px] bg-orange-50 text-orange-700 border border-orange-100 px-2 py-0.5 rounded">Práctico Req.</span>}
+                                    </div>
+                                </div>
+                              </div>
+                              
+                              {isLocked ? (
+                                <span className="text-xs font-bold text-slate-400 border border-slate-200 px-3 py-1 rounded bg-slate-100 select-none cursor-not-allowed">
+                                   Finalizado (Única vez)
+                                </span>
+                              ) : (
+                                <button 
+                                  onClick={() => startCourseMaterial(course)}
+                                  className={`text-sm font-semibold px-4 py-2 rounded-lg border transition-colors ${
+                                      isViewed 
+                                        ? 'bg-white text-slate-500 border-slate-200 hover:border-slate-300' 
+                                        : 'bg-white text-brand-700 border-brand-200 hover:bg-brand-50'
+                                  }`}
+                                >
+                                  {isViewed ? 'Volver a ver' : 'Ver Material'}
+                                </button>
+                              )}
+                          </div>
+                        );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
     </div>
   );
 };

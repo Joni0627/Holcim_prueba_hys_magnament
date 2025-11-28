@@ -61,23 +61,36 @@ export interface User {
 }
 
 export enum MOCStatus {
-  DRAFT = 'Borrador',
-  PENDING_REVIEW = 'Pendiente Revisión',
-  APPROVED = 'Aprobado',
-  IN_PROGRESS = 'En Ejecución',
-  COMPLETED = 'Finalizado',
+  PENDING = 'PENDIENTE',
+  APPROVED = 'APROBADO',
+  REJECTED = 'RECHAZADO',
+  REVIEW = 'REVISIÓN',
+  EXECUTION = 'EN EJECUCIÓN',
+  COMPLETED = 'FINALIZADO'
 }
 
 export interface MOCRecord {
   id: string;
   title: string;
-  description: string;
-  location: string;
-  risks: string[];
-  mitigations: string[];
+  requesterId: string; // DNI/Legajo Solicitante
+  startDate: string;
+  endDate: string;
+  responsibleId: string; // Responsable Tarea
+  approverId: string; // Aprobador
+  standardTypeId: string;
+  description: string; // Detalle/Análisis
+  riskIds: string[]; // Multi-select from RiskType
+  involvedAreaIds: string[]; // Multi-select from Area
+  imageUrl?: string;
+  documentUrl?: string; // PDF/Word
+  coordinates?: { lat: number; lng: number };
+  actionPlan: string;
   status: MOCStatus;
+  
   createdAt: string;
-  createdBy: string;
+  
+  // Computed/Joined fields for display
+  locationText?: string; // Helper for legacy view or specific text location
 }
 
 // --- SCAFFOLDS TYPES ---
@@ -129,16 +142,61 @@ export interface ChecklistItemTemplate {
   allowPhoto: boolean;
 }
 
-// --- TRAINING TYPES ---
+// --- TRAINING LMS TYPES ---
 
-export interface TrainingModule {
+export interface Question {
+  id: string;
+  text: string;
+  options: string[];
+  correctIndex: number;
+}
+
+export interface Evaluation {
+  id: string;
+  name: string;
+  passingScore: number; // e.g., 80
+  questions: Question[];
+}
+
+export interface Course {
   id: string;
   title: string;
   description: string;
-  duration: string; 
-  status: 'pending' | 'completed' | 'failed';
-  dueDate: string;
-  contentUrl?: string; 
+  contentUrl?: string; // Video URL or PDF URL
+  contentType: 'VIDEO' | 'PDF';
+  validityMonths: number; // Vigencia in months
+  evaluationId?: string; // Link to an Evaluation
+  
+  // New flags requested
+  isOneTime?: boolean; // Por única vez (no vence o no requiere reválida)
+  requiresPractical?: boolean; // Requiere examen práctico
+}
+
+export interface TrainingPlan {
+  id: string;
+  name: string;
+  positionIds: string[]; // Array of Job Position Names (strings) or IDs
+  courseIds: string[]; // Array of Course IDs
+}
+
+export interface QuizAttempt {
+  date: string;
+  score: number;
+  passed: boolean;
+  wrongQuestionIds: string[];
+}
+
+export interface UserTrainingProgress {
+  userId: string;
+  courseId: string;
+  status: 'PENDING' | 'COMPLETED' | 'FAILED' | 'PENDING_PRACTICAL';
+  materialViewed?: boolean; // Track if video/pdf was consumed
+  score?: number;
+  completionDate?: string;
+  expiryDate?: string;
+  practicalValidatedBy?: string; // ID of H&S personnel
+  practicalValidatedAt?: string;
+  attempts?: QuizAttempt[]; // History of attempts
 }
 
 export interface Certification {

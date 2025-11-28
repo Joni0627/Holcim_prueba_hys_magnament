@@ -1,7 +1,8 @@
 
 import React, { useState } from 'react';
-import { User, Company, Area, UserRole, UserProfile, JobPosition, Vehicle, Machine, StandardType, RiskType } from '../types';
-import { Plus, Search, Edit2, Trash2, Users, Building, MapPin, Save, X, Upload, Briefcase, Truck, Wrench, ShieldAlert, FileText, ChevronRight } from 'lucide-react';
+import { User, Company, Area, UserRole, UserProfile, JobPosition, Vehicle, Machine, StandardType, RiskType, Evaluation, Question, Course, TrainingPlan } from '../types';
+import { Plus, Search, Edit2, Trash2, Users, Building, MapPin, X, Upload, Briefcase, Truck, Wrench, ShieldAlert, FileText, GraduationCap, BookOpen, Layers, CheckSquare, Link, ArrowLeft } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 const INITIAL_JOB_POSITIONS = [
   "OPERARIO DE PRODUCCION - AFR",
@@ -52,7 +53,7 @@ const INITIAL_JOB_POSITIONS = [
 const ROLES: UserRole[] = ['Gerencia', 'Jefatura', 'Coordinador', 'Supervisor', 'Operario', 'Pasante'];
 const PROFILES: UserProfile[] = ['Administrador', 'Usuario', 'Usuario Tercero'];
 
-type TabType = 'users' | 'companies' | 'areas' | 'positions' | 'vehicles' | 'machines' | 'standards' | 'risks';
+type TabType = 'users' | 'companies' | 'areas' | 'positions' | 'vehicles' | 'machines' | 'standards' | 'risks' | 'evaluations' | 'courses' | 'plans';
 
 const TAB_GROUPS = [
   {
@@ -77,604 +78,439 @@ const TAB_GROUPS = [
       { id: 'standards', label: 'Tipos de Estándar', icon: <FileText size={16}/> },
       { id: 'risks', label: 'Riesgos Asociados', icon: <ShieldAlert size={16}/> },
     ]
+  },
+  {
+    label: 'Academia',
+    tabs: [
+      { id: 'evaluations', label: 'Evaluaciones', icon: <CheckSquare size={16}/> },
+      { id: 'courses', label: 'Cursos', icon: <BookOpen size={16}/> },
+      { id: 'plans', label: 'Planes', icon: <Layers size={16}/> },
+    ]
+  },
+];
+
+// --- MOCK DATA FOR LMS ---
+export const INITIAL_EVALUATIONS: Evaluation[] = [
+  {
+    id: '1', name: 'Examen Trabajo en Altura', passingScore: 80,
+    questions: [
+       { id: 'q1', text: '¿A qué altura se considera trabajo en altura?', options: ['1.5m', '1.8m', '2.0m'], correctIndex: 1 },
+       { id: 'q2', text: '¿Qué elemento es fundamental?', options: ['Casco', 'Arnés', 'Ambos'], correctIndex: 2 }
+    ]
+  },
+  {
+    id: '2', name: 'Examen Riesgo Eléctrico', passingScore: 70,
+    questions: [
+       { id: 'q3', text: '¿Qué es un EPP dieléctrico?', options: ['Conductor', 'Aislante', 'Metálico'], correctIndex: 1 }
+    ]
   }
+];
+export const INITIAL_COURSES: Course[] = [
+  { id: '1', title: 'Trabajo en Altura Nivel 1', description: 'Fundamentos básicos.', contentType: 'VIDEO', contentUrl: '', validityMonths: 12, evaluationId: '1', isOneTime: false, requiresPractical: true },
+  { id: '2', title: 'Trabajo en Altura Nivel 2', description: 'Técnicas avanzadas.', contentType: 'VIDEO', contentUrl: '', validityMonths: 12, evaluationId: '1', isOneTime: false, requiresPractical: true }, // Shares Exam 1
+  { id: '3', title: 'Seguridad Eléctrica', description: 'Normas y procedimientos.', contentType: 'PDF', contentUrl: '', validityMonths: 24, evaluationId: '2', isOneTime: false, requiresPractical: false }
+];
+export const INITIAL_PLANS: TrainingPlan[] = [
+  { id: '1', name: 'Plan Operario General', positionIds: ['OPERARIO DE PRODUCCION - AFR'], courseIds: ['1', '2'] }
 ];
 
 const MasterData = () => {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabType>('users');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  // Determine current parent group based on activeTab
   const currentGroup = TAB_GROUPS.find(g => g.tabs.some(t => t.id === activeTab)) || TAB_GROUPS[0];
 
-  // Mock Data
-  const [companies, setCompanies] = useState<Company[]>([
-    { id: '1', name: 'Cementos Del Sur' },
-    { id: '2', name: 'Logística Externa S.A.' }
-  ]);
-  const [areas, setAreas] = useState<Area[]>([
-    { id: '1', name: 'Producción' },
-    { id: '2', name: 'Mantenimiento' },
-    { id: '3', name: 'Calidad' }
-  ]);
-  const [positions, setPositions] = useState<JobPosition[]>(
-    INITIAL_JOB_POSITIONS.map((name, index) => ({ id: index.toString(), name }))
-  );
-  const [vehicles, setVehicles] = useState<Vehicle[]>([
-    { id: '1', plate: 'AB123CD', brand: 'Toyota', model: 'Hilux' },
-    { id: '2', plate: 'AD456EF', brand: 'Ford', model: 'Ranger' }
-  ]);
-  const [machines, setMachines] = useState<Machine[]>([
-    { id: '1', serialNumber: 'SN-998877', brand: 'Caterpillar', model: 'Excavadora 320' },
-    { id: '2', serialNumber: 'SN-112233', brand: 'Komatsu', model: 'PC200' }
-  ]);
-  const [standards, setStandards] = useState<StandardType[]>([
-    { id: '1', name: 'Procedimiento Interno' },
-    { id: '2', name: 'Norma ISO 45001' },
-    { id: '3', name: 'Legislación Local' }
-  ]);
-  const [risks, setRisks] = useState<RiskType[]>([
-    { id: '1', name: 'Atrapamiento' },
-    { id: '2', name: 'Caída a distinto nivel' },
-    { id: '3', name: 'Contacto eléctrico' },
-    { id: '4', name: 'Proyección de partículas' }
-  ]);
+  // --- DATA STATES ---
+  const [users, setUsers] = useState<User[]>([{ id: '20304050', firstName: 'Carlos', lastName: 'Mendez', emails: ['carlos@empresa.com'], role: 'Supervisor', position: 'SUPERVISOR DE MANTENIMIENTO', profile: 'Usuario', companyId: '1', areaId: '2' }]);
+  const [companies, setCompanies] = useState<Company[]>([{ id: '1', name: 'Cementos Del Sur' }, { id: '2', name: 'Logística Externa' }]);
+  const [areas, setAreas] = useState<Area[]>([{ id: '1', name: 'Producción' }, { id: '2', name: 'Mantenimiento' }]);
+  const [positions, setPositions] = useState<JobPosition[]>(INITIAL_JOB_POSITIONS.map((name, index) => ({ id: index.toString(), name })));
+  const [vehicles, setVehicles] = useState<Vehicle[]>([{ id: '1', plate: 'AB123CD', brand: 'Toyota', model: 'Hilux' }]);
+  const [machines, setMachines] = useState<Machine[]>([{ id: '1', serialNumber: 'SN-998877', brand: 'Caterpillar', model: '320' }]);
+  const [standards, setStandards] = useState<StandardType[]>([{ id: '1', name: 'Procedimiento Interno' }]);
+  const [risks, setRisks] = useState<RiskType[]>([{ id: '1', name: 'Atrapamiento' }]);
   
-  const [users, setUsers] = useState<User[]>([
-    {
-      id: '20304050',
-      firstName: 'Carlos',
-      lastName: 'Mendez',
-      emails: ['carlos.mendez@empresa.com'],
-      role: 'Supervisor',
-      position: 'SUPERVISOR DE MANTENIMIENTO',
-      profile: 'Usuario',
-      companyId: '1',
-      areaId: '2',
-      avatarUrl: 'https://picsum.photos/40/40'
-    }
-  ]);
+  // LMS Data States
+  const [evaluations, setEvaluations] = useState<Evaluation[]>(INITIAL_EVALUATIONS);
+  const [courses, setCourses] = useState<Course[]>(INITIAL_COURSES);
+  const [plans, setPlans] = useState<TrainingPlan[]>(INITIAL_PLANS);
 
-  // Form States
-  const [userForm, setUserForm] = useState<Partial<User>>({
-    id: '', firstName: '', lastName: '', emails: [], role: 'Operario', position: INITIAL_JOB_POSITIONS[0], profile: 'Usuario'
-  });
+  // --- FORM STATES ---
+  const [userForm, setUserForm] = useState<Partial<User>>({});
   const [emailInput, setEmailInput] = useState('');
-  
-  // Generic Name form (Company, Area, Position, Standard, Risk)
   const [simpleName, setSimpleName] = useState('');
+  const [assetForm, setAssetForm] = useState({ identifier: '', brand: '', model: '' });
 
-  // Asset Form (Vehicle / Machine)
-  const [assetForm, setAssetForm] = useState({
-    identifier: '', // Plate or Serial Number
-    brand: '',
-    model: ''
-  });
+  // LMS Forms
+  const [evaluationForm, setEvaluationForm] = useState<Partial<Evaluation>>({ questions: [] });
+  const [courseForm, setCourseForm] = useState<Partial<Course>>({});
+  const [planForm, setPlanForm] = useState<Partial<TrainingPlan>>({ positionIds: [], courseIds: [] });
+  // Question Builder State
+  const [tempQuestion, setTempQuestion] = useState<Partial<Question>>({ options: ['', ''], correctIndex: 0 });
+  const [editingQuestionIndex, setEditingQuestionIndex] = useState<number | null>(null);
 
   const resetForm = () => {
-    setUserForm({
-      id: '', firstName: '', lastName: '', emails: [], role: 'Operario', position: positions[0]?.name || '', profile: 'Usuario', companyId: '', areaId: '', bossId: ''
-    });
+    setUserForm({ id: '', firstName: '', lastName: '', emails: [], role: 'Operario', position: positions[0]?.name || '' });
     setSimpleName('');
     setEmailInput('');
     setAssetForm({ identifier: '', brand: '', model: '' });
+    setEvaluationForm({ name: '', passingScore: 80, questions: [] });
+    setCourseForm({ title: '', description: '', validityMonths: 12, contentType: 'VIDEO', contentUrl: '', isOneTime: false, requiresPractical: false });
+    setPlanForm({ name: '', positionIds: [], courseIds: [] });
+    setTempQuestion({ text: '', options: ['', ''], correctIndex: 0 });
+    setEditingQuestionIndex(null);
     setEditingId(null);
     setIsModalOpen(false);
   };
 
+  // --- SUBMIT HANDLERS ---
   const handleUserSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const finalEmails = emailInput ? [emailInput, ...(userForm.emails || [])] : (userForm.emails || []);
     const newUser = { ...userForm, emails: finalEmails } as User;
-
-    if (editingId) {
-      setUsers(users.map(u => u.id === editingId ? { ...u, ...newUser } : u));
-    } else {
-      if (users.find(u => u.id === newUser.id)) {
-        alert('El DNI/Legajo ya existe.');
-        return;
-      }
-      setUsers([...users, newUser]);
-    }
-    resetForm();
-  };
-
-  const handleAssetSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (activeTab === 'vehicles') {
-      const newItem: Vehicle = { 
-        id: editingId || Date.now().toString(), 
-        plate: assetForm.identifier, 
-        brand: assetForm.brand, 
-        model: assetForm.model 
-      };
-      if (editingId) {
-        setVehicles(vehicles.map(v => v.id === editingId ? newItem : v));
-      } else {
-        setVehicles([...vehicles, newItem]);
-      }
-    } else if (activeTab === 'machines') {
-      const newItem: Machine = { 
-        id: editingId || Date.now().toString(), 
-        serialNumber: assetForm.identifier, 
-        brand: assetForm.brand, 
-        model: assetForm.model 
-      };
-      if (editingId) {
-        setMachines(machines.map(m => m.id === editingId ? newItem : m));
-      } else {
-        setMachines([...machines, newItem]);
-      }
-    }
+    if (editingId) setUsers(users.map(u => u.id === editingId ? { ...u, ...newUser } : u));
+    else setUsers([...users, newUser]);
     resetForm();
   };
 
   const handleSimpleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const newItem = { id: editingId || Date.now().toString(), name: simpleName };
-    
-    if (activeTab === 'companies') {
-       if (editingId) setCompanies(companies.map(c => c.id === editingId ? newItem : c));
-       else setCompanies([...companies, newItem]);
-    } else if (activeTab === 'areas') {
-       if (editingId) setAreas(areas.map(a => a.id === editingId ? newItem : a));
-       else setAreas([...areas, newItem]);
-    } else if (activeTab === 'positions') {
-       if (editingId) setPositions(positions.map(p => p.id === editingId ? newItem : p));
-       else setPositions([newItem, ...positions]);
-    } else if (activeTab === 'standards') {
-      if (editingId) setStandards(standards.map(p => p.id === editingId ? newItem : p));
-      else setStandards([newItem, ...standards]);
-    } else if (activeTab === 'risks') {
-      if (editingId) setRisks(risks.map(p => p.id === editingId ? newItem : p));
-      else setRisks([newItem, ...risks]);
+    if (activeTab === 'companies') setCompanies(editingId ? companies.map(x => x.id === editingId ? newItem : x) : [...companies, newItem]);
+    else if (activeTab === 'areas') setAreas(editingId ? areas.map(x => x.id === editingId ? newItem : x) : [...areas, newItem]);
+    else if (activeTab === 'positions') setPositions(editingId ? positions.map(x => x.id === editingId ? newItem : x) : [newItem, ...positions]);
+    else if (activeTab === 'standards') setStandards(editingId ? standards.map(x => x.id === editingId ? newItem : x) : [...standards, newItem]);
+    else if (activeTab === 'risks') setRisks(editingId ? risks.map(x => x.id === editingId ? newItem : x) : [...risks, newItem]);
+    resetForm();
+  };
+
+  const handleLmsSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const id = editingId || Date.now().toString();
+
+    if (activeTab === 'evaluations') {
+      const newItem = { ...evaluationForm, id } as Evaluation;
+      setEvaluations(editingId ? evaluations.map(x => x.id === editingId ? newItem : x) : [...evaluations, newItem]);
+    } else if (activeTab === 'courses') {
+      const newItem = { ...courseForm, id } as Course;
+      setCourses(editingId ? courses.map(x => x.id === editingId ? newItem : x) : [...courses, newItem]);
+    } else if (activeTab === 'plans') {
+      const newItem = { ...planForm, id } as TrainingPlan;
+      setPlans(editingId ? plans.map(x => x.id === editingId ? newItem : x) : [...plans, newItem]);
     }
     resetForm();
   };
 
+  // --- QUESTION MANAGEMENT ---
+  const saveQuestion = () => {
+    if (!tempQuestion.text) return;
+    const q: Question = { ...tempQuestion as Question, id: tempQuestion.id || Date.now().toString() };
+    
+    let updatedQuestions = [...(evaluationForm.questions || [])];
+    
+    if (editingQuestionIndex !== null) {
+      // Update existing
+      updatedQuestions[editingQuestionIndex] = q;
+    } else {
+      // Add new
+      updatedQuestions.push(q);
+    }
+
+    setEvaluationForm({ ...evaluationForm, questions: updatedQuestions });
+    setTempQuestion({ text: '', options: ['', ''], correctIndex: 0 });
+    setEditingQuestionIndex(null);
+  };
+
+  const editQuestion = (idx: number) => {
+    const q = evaluationForm.questions![idx];
+    setTempQuestion(q);
+    setEditingQuestionIndex(idx);
+  };
+
+  const deleteQuestion = (idx: number) => {
+    const updatedQuestions = evaluationForm.questions!.filter((_, i) => i !== idx);
+    setEvaluationForm({ ...evaluationForm, questions: updatedQuestions });
+  };
+
   const openEdit = (item: any) => {
     setEditingId(item.id);
-    if (activeTab === 'users') {
-      const u = item as User;
-      setUserForm(u);
-      setEmailInput(u.emails[0] || '');
-    } else if (activeTab === 'vehicles') {
-      const v = item as Vehicle;
-      setAssetForm({ identifier: v.plate, brand: v.brand, model: v.model });
-    } else if (activeTab === 'machines') {
-      const m = item as Machine;
-      setAssetForm({ identifier: m.serialNumber, brand: m.brand, model: m.model });
-    } else {
-      setSimpleName(item.name);
-    }
+    if (activeTab === 'evaluations') setEvaluationForm(item);
+    else if (activeTab === 'courses') setCourseForm(item);
+    else if (activeTab === 'plans') setPlanForm(item);
+    else if (activeTab === 'users') { setUserForm(item); setEmailInput(item.emails[0] || ''); }
+    else setSimpleName(item.name);
     setIsModalOpen(true);
   };
 
-  const deleteItem = (id: string) => {
-    if (!confirm('¿Está seguro de eliminar este registro?')) return;
-    if (activeTab === 'users') setUsers(users.filter(u => u.id !== id));
-    if (activeTab === 'companies') setCompanies(companies.filter(c => c.id !== id));
-    if (activeTab === 'areas') setAreas(areas.filter(a => a.id !== id));
-    if (activeTab === 'positions') setPositions(positions.filter(p => p.id !== id));
-    if (activeTab === 'vehicles') setVehicles(vehicles.filter(v => v.id !== id));
-    if (activeTab === 'machines') setMachines(machines.filter(m => m.id !== id));
-    if (activeTab === 'standards') setStandards(standards.filter(m => m.id !== id));
-    if (activeTab === 'risks') setRisks(risks.filter(m => m.id !== id));
+  const toggleSelection = (field: 'positionIds' | 'courseIds', id: string) => {
+    setPlanForm(prev => {
+      const current = prev[field] || [];
+      return { ...prev, [field]: current.includes(id) ? current.filter(x => x !== id) : [...current, id] };
+    });
   };
 
-  const getActiveTabTitle = () => {
-    switch(activeTab) {
-      case 'users': return 'Usuario';
-      case 'companies': return 'Empresa';
-      case 'areas': return 'Área';
-      case 'positions': return 'Puesto';
-      case 'vehicles': return 'Vehículo';
-      case 'machines': return 'Máquina';
-      case 'standards': return 'Tipo de Estándar';
-      case 'risks': return 'Riesgo Asociado';
-      default: return 'Registro';
-    }
-  };
-
-  const handleParentTabClick = (group: typeof TAB_GROUPS[0]) => {
-    // Set active tab to the first child of the clicked group
-    setActiveTab(group.tabs[0].id as TabType);
-  };
+  const handleParentTabClick = (group: typeof TAB_GROUPS[0]) => setActiveTab(group.tabs[0].id as TabType);
+  const getActiveTabTitle = () => TAB_GROUPS.flatMap(g => g.tabs).find(t => t.id === activeTab)?.label || 'Registro';
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-brand-800">Datos Maestros</h2>
-          <p className="text-slate-500">Gestión de usuarios, estructuras, activos y parametría MDC.</p>
+        <div className="flex items-center gap-3">
+          <button onClick={() => navigate('/')} className="bg-white p-2 rounded-full border border-slate-200 text-slate-500 hover:text-brand-800 hover:border-brand-300 transition-colors">
+            <ArrowLeft size={20} />
+          </button>
+          <div>
+            <h2 className="text-2xl font-bold text-brand-800">Datos Maestros</h2>
+            <p className="text-slate-500">Gestión de usuarios, activos y academia.</p>
+          </div>
         </div>
       </div>
 
-      {/* Parent Tabs Navigation (Solapas Madres) */}
-      <div className="flex border-b border-slate-200 gap-1">
+      <div className="flex border-b border-slate-200 gap-1 overflow-x-auto no-scrollbar">
         {TAB_GROUPS.map((group, idx) => {
           const isActiveGroup = group.label === currentGroup.label;
           return (
-            <button
-              key={idx}
-              onClick={() => handleParentTabClick(group)}
-              className={`
-                px-6 py-3 font-bold text-sm uppercase tracking-wide transition-all relative rounded-t-lg
-                ${isActiveGroup 
-                  ? 'text-brand-800 bg-brand-50/50' 
-                  : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}
-              `}
-            >
+            <button key={idx} onClick={() => handleParentTabClick(group)}
+              className={`px-6 py-3 font-bold text-sm uppercase tracking-wide transition-all relative rounded-t-lg shrink-0 ${isActiveGroup ? 'text-brand-800 bg-brand-50/50' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>
               {group.label}
-              {isActiveGroup && (
-                <div className="absolute bottom-0 left-0 w-full h-0.5 bg-brand-800"></div>
-              )}
+              {isActiveGroup && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-brand-800"></div>}
             </button>
           );
         })}
       </div>
 
-      {/* Child Tabs Navigation (Solapas Hijas) */}
       <div className="bg-slate-50 p-2 rounded-lg flex flex-wrap gap-2">
          {currentGroup.tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as TabType)}
-              className={`
-                flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all shadow-sm
-                ${activeTab === tab.id 
-                  ? 'bg-white text-brand-800 border border-slate-200 ring-1 ring-brand-100' 
-                  : 'bg-transparent text-slate-600 hover:bg-slate-200 border border-transparent'}
-              `}
-            >
-              {tab.icon}
-              {tab.label}
+            <button key={tab.id} onClick={() => setActiveTab(tab.id as TabType)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all shadow-sm ${activeTab === tab.id ? 'bg-white text-brand-800 border border-slate-200 ring-1 ring-brand-100' : 'bg-transparent text-slate-600 hover:bg-slate-200 border border-transparent'}`}>
+              {tab.icon} {tab.label}
             </button>
          ))}
       </div>
 
-      {/* Toolbar */}
       <div className="flex justify-between items-center bg-white p-3 rounded-lg border border-slate-200 shadow-sm mt-4">
         <div className="relative">
           <Search className="absolute left-3 top-2.5 text-slate-400" size={18} />
-          <input 
-            type="text" 
-            placeholder="Buscar..." 
-            className="pl-9 pr-4 py-2 bg-slate-50 border-none rounded-md text-sm focus:ring-2 focus:ring-brand-500 outline-none w-64"
-          />
+          <input type="text" placeholder="Buscar..." className="pl-9 pr-4 py-2 bg-slate-50 border-none rounded-md text-sm focus:ring-2 focus:ring-brand-500 outline-none w-64 text-slate-900" />
         </div>
-        <button 
-          onClick={() => { resetForm(); setIsModalOpen(true); }}
-          className="bg-brand-800 hover:bg-brand-900 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors"
-        >
+        <button onClick={() => { resetForm(); setIsModalOpen(true); }} className="bg-brand-800 hover:bg-brand-900 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors">
           <Plus size={18} /> Nuevo {getActiveTabTitle()}
         </button>
       </div>
 
-      {/* Content Lists */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        {activeTab === 'users' && (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm text-slate-600">
-              <thead className="bg-slate-50 text-slate-800 font-semibold border-b border-slate-200">
-                <tr>
-                  <th className="p-4">Usuario</th>
-                  <th className="p-4">Puesto / Cargo</th>
-                  <th className="p-4">Ubicación</th>
-                  <th className="p-4 text-right">Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {users.map(u => (
-                  <tr key={u.id} className="border-b border-slate-100 hover:bg-slate-50">
-                    <td className="p-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-brand-100 text-brand-800 flex items-center justify-center font-bold">
-                          {u.firstName[0]}{u.lastName[0]}
-                        </div>
-                        <div>
-                          <p className="font-bold text-slate-800">{u.firstName} {u.lastName}</p>
-                          <p className="text-xs text-slate-500">ID: {u.id}</p>
-                          <p className="text-xs text-blue-600">{u.emails[0]}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="p-4">
-                      <p className="font-medium text-slate-800">{u.position}</p>
-                      <span className="inline-block px-2 py-0.5 rounded text-xs bg-brand-50 text-brand-700 mt-1">{u.role}</span>
-                    </td>
-                    <td className="p-4">
-                      <p>{areas.find(a => a.id === u.areaId)?.name || 'Sin Área'}</p>
-                      <p className="text-xs text-slate-400">{companies.find(c => c.id === u.companyId)?.name || 'Sin Empresa'}</p>
-                    </td>
-                    <td className="p-4 text-right space-x-2">
-                      <button onClick={() => openEdit(u)} className="p-2 text-slate-500 hover:bg-slate-100 rounded-full"><Edit2 size={16}/></button>
-                      <button onClick={() => deleteItem(u.id)} className="p-2 text-red-500 hover:bg-red-50 rounded-full"><Trash2 size={16}/></button>
-                    </td>
+        {/* Simplified Table Renderer */}
+        <table className="w-full text-left text-sm text-slate-600">
+           <thead className="bg-slate-50 text-slate-800 font-semibold border-b border-slate-200">
+              <tr>
+                <th className="p-4">Nombre / Título</th>
+                <th className="p-4">Detalle</th>
+                <th className="p-4 text-right">Acciones</th>
+              </tr>
+           </thead>
+           <tbody>
+             {(() => {
+                let list: any[] = [];
+                if (activeTab === 'users') list = users.map(u => ({ id: u.id, name: `${u.firstName} ${u.lastName}`, detail: u.position }));
+                else if (activeTab === 'companies') list = companies.map(c => ({ ...c, detail: 'Empresa' }));
+                else if (activeTab === 'areas') list = areas.map(a => ({ ...a, detail: 'Sector' }));
+                else if (activeTab === 'positions') list = positions.map(p => ({ ...p, detail: 'Puesto Laboral' }));
+                else if (activeTab === 'evaluations') list = evaluations.map(e => ({ ...e, detail: `${e.questions.length} Preguntas - Pase: ${e.passingScore}%` }));
+                else if (activeTab === 'courses') list = courses.map(c => ({ id: c.id, name: c.title, detail: `Vigencia: ${c.validityMonths} meses ${c.isOneTime ? '(Unica Vez)' : ''}` }));
+                else if (activeTab === 'plans') list = plans.map(p => ({ ...p, detail: `${p.courseIds.length} Cursos - ${p.positionIds.length} Puestos` }));
+                else if (activeTab === 'standards') list = standards.map(s => ({ ...s, detail: 'Estándar MDC' }));
+                else if (activeTab === 'risks') list = risks.map(r => ({ ...r, detail: 'Riesgo MDC' }));
+
+                return list.map(item => (
+                  <tr key={item.id} className="border-b border-slate-100 hover:bg-slate-50">
+                     <td className="p-4 font-bold text-slate-800">{item.name}</td>
+                     <td className="p-4 text-slate-500">{item.detail}</td>
+                     <td className="p-4 text-right space-x-2">
+                        <button onClick={() => openEdit(activeTab === 'users' ? users.find(u => u.id === item.id) : activeTab === 'courses' ? courses.find(c => c.id === item.id) : activeTab === 'plans' ? plans.find(p => p.id === item.id) : activeTab === 'evaluations' ? evaluations.find(e => e.id === item.id) : item)} className="p-2 text-slate-500 hover:bg-slate-100 rounded-full"><Edit2 size={16}/></button>
+                        <button className="p-2 text-red-500 hover:bg-red-50 rounded-full"><Trash2 size={16}/></button>
+                     </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {(activeTab === 'vehicles' || activeTab === 'machines') && (
-           <table className="w-full text-left text-sm text-slate-600">
-              <thead className="bg-slate-50 text-slate-800 font-semibold border-b border-slate-200">
-                <tr>
-                  <th className="p-4">ID</th>
-                  <th className="p-4">{activeTab === 'vehicles' ? 'Patente' : 'Nro. Serie'}</th>
-                  <th className="p-4">Marca</th>
-                  <th className="p-4">Modelo</th>
-                  <th className="p-4 text-right">Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(() => {
-                  const list: any[] = activeTab === 'vehicles' ? vehicles : machines;
-                  return list.map((item: any) => (
-                    <tr key={item.id} className="border-b border-slate-100 hover:bg-slate-50">
-                      <td className="p-4 font-mono text-xs text-slate-500">{item.id}</td>
-                      <td className="p-4 font-bold text-slate-800">{activeTab === 'vehicles' ? item.plate : item.serialNumber}</td>
-                      <td className="p-4">{item.brand}</td>
-                      <td className="p-4">{item.model}</td>
-                      <td className="p-4 text-right space-x-2">
-                        <button onClick={() => openEdit(item)} className="p-2 text-slate-500 hover:bg-slate-100 rounded-full"><Edit2 size={16}/></button>
-                        <button onClick={() => deleteItem(item.id)} className="p-2 text-red-500 hover:bg-red-50 rounded-full"><Trash2 size={16}/></button>
-                      </td>
-                    </tr>
-                  ));
-                })()}
-              </tbody>
-           </table>
-        )}
-
-        {/* Generic Table for Name-Only Types */}
-        {['companies', 'areas', 'positions', 'standards', 'risks'].includes(activeTab) && (
-          <table className="w-full text-left text-sm text-slate-600">
-             <thead className="bg-slate-50 text-slate-800 font-semibold border-b border-slate-200">
-                <tr>
-                  <th className="p-4">ID</th>
-                  <th className="p-4">Nombre</th>
-                  <th className="p-4 text-right">Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {/* Dynamically select list based on tab */}
-                {(() => {
-                  let list: any[] = [];
-                  if (activeTab === 'companies') list = companies;
-                  else if (activeTab === 'areas') list = areas;
-                  else if (activeTab === 'positions') list = positions;
-                  else if (activeTab === 'standards') list = standards;
-                  else if (activeTab === 'risks') list = risks;
-                  
-                  return list.map((item: any) => (
-                   <tr key={item.id} className="border-b border-slate-100 hover:bg-slate-50">
-                      <td className="p-4 font-mono text-xs w-32">{item.id}</td>
-                      <td className="p-4 font-bold text-slate-800">{item.name}</td>
-                      <td className="p-4 text-right space-x-2 w-32">
-                        <button onClick={() => openEdit(item)} className="p-2 text-slate-500 hover:bg-slate-100 rounded-full"><Edit2 size={16}/></button>
-                        <button onClick={() => deleteItem(item.id)} className="p-2 text-red-500 hover:bg-red-50 rounded-full"><Trash2 size={16}/></button>
-                      </td>
-                   </tr>
-                  ));
-                })()}
-              </tbody>
-          </table>
-        )}
+                ));
+             })()}
+           </tbody>
+        </table>
       </div>
 
-      {/* Modal Overlay */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-6 border-b border-slate-100 sticky top-0 bg-white z-10">
-              <h3 className="text-xl font-bold text-slate-800">
-                {editingId ? 'Editar Registro' : 'Nuevo Registro'}
-              </h3>
+              <h3 className="text-xl font-bold text-slate-800">{editingId ? 'Editar' : 'Nuevo'} {getActiveTabTitle()}</h3>
               <button onClick={resetForm} className="text-slate-400 hover:text-slate-600"><X size={24}/></button>
             </div>
-
+            
             <div className="p-6">
-              {activeTab === 'users' ? (
-                <form onSubmit={handleUserSubmit} className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-bold text-slate-500 mb-1">DNI / Legajo *</label>
-                      <input 
-                        required 
-                        disabled={!!editingId}
-                        value={userForm.id} 
-                        onChange={e => setUserForm({...userForm, id: e.target.value})}
-                        className="w-full p-2 border border-slate-300 rounded focus:border-brand-500 outline-none disabled:bg-slate-100 bg-white text-slate-800" 
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-slate-500 mb-1">Email Principal *</label>
-                      <input 
-                        required 
-                        type="email"
-                        value={emailInput} 
-                        onChange={e => setEmailInput(e.target.value)}
-                        className="w-full p-2 border border-slate-300 rounded focus:border-brand-500 outline-none bg-white text-slate-800" 
-                        placeholder="usuario@empresa.com"
-                      />
-                      <p className="text-[10px] text-slate-400 mt-1">Para múltiples emails, separe por coma (funcionalidad futura)</p>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-slate-500 mb-1">Nombre *</label>
-                      <input 
-                        required 
-                        value={userForm.firstName} 
-                        onChange={e => setUserForm({...userForm, firstName: e.target.value})}
-                        className="w-full p-2 border border-slate-300 rounded focus:border-brand-500 outline-none bg-white text-slate-800" 
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-slate-500 mb-1">Apellido *</label>
-                      <input 
-                        required 
-                        value={userForm.lastName} 
-                        onChange={e => setUserForm({...userForm, lastName: e.target.value})}
-                        className="w-full p-2 border border-slate-300 rounded focus:border-brand-500 outline-none bg-white text-slate-800" 
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-slate-500 mb-1">Cargo *</label>
-                      <select 
-                        required 
-                        value={userForm.role} 
-                        onChange={e => setUserForm({...userForm, role: e.target.value as UserRole})}
-                        className="w-full p-2 border border-slate-300 rounded focus:border-brand-500 outline-none bg-white text-slate-800"
-                      >
-                        {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-slate-500 mb-1">Perfil App *</label>
-                      <select 
-                        required 
-                        value={userForm.profile} 
-                        onChange={e => setUserForm({...userForm, profile: e.target.value as UserProfile})}
-                        className="w-full p-2 border border-slate-300 rounded focus:border-brand-500 outline-none bg-white text-slate-800"
-                      >
-                        {PROFILES.map(p => <option key={p} value={p}>{p}</option>)}
-                      </select>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-500 mb-1">Puesto (Matriz de Capacitación) *</label>
-                    <select 
-                      required 
-                      value={userForm.position} 
-                      onChange={e => setUserForm({...userForm, position: e.target.value})}
-                      className="w-full p-2 border border-slate-300 rounded focus:border-brand-500 outline-none bg-white text-sm text-slate-800"
-                    >
-                      {positions.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+               {/* USER FORM */}
+               {activeTab === 'users' && (
+                 <form onSubmit={handleUserSubmit} className="space-y-4">
+                    <input required placeholder="DNI" className="w-full p-2 border rounded text-slate-900 bg-white" value={userForm.id} onChange={e => setUserForm({...userForm, id: e.target.value})} />
+                    <input required placeholder="Nombre" className="w-full p-2 border rounded text-slate-900 bg-white" value={userForm.firstName} onChange={e => setUserForm({...userForm, firstName: e.target.value})} />
+                    <input required placeholder="Apellido" className="w-full p-2 border rounded text-slate-900 bg-white" value={userForm.lastName} onChange={e => setUserForm({...userForm, lastName: e.target.value})} />
+                    <select className="w-full p-2 border rounded text-slate-900 bg-white" value={userForm.position} onChange={e => setUserForm({...userForm, position: e.target.value})}>
+                        {positions.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
                     </select>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                     <div>
-                      <label className="block text-xs font-bold text-slate-500 mb-1">Empresa *</label>
-                      <select 
-                        required 
-                        value={userForm.companyId} 
-                        onChange={e => setUserForm({...userForm, companyId: e.target.value})}
-                        className="w-full p-2 border border-slate-300 rounded focus:border-brand-500 outline-none bg-white text-slate-800"
-                      >
-                        <option value="">Seleccionar...</option>
-                        {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                      </select>
+                    <button type="submit" className="w-full bg-brand-800 text-white p-2 rounded">Guardar</button>
+                 </form>
+               )}
+               
+               {/* EVALUATION FORM */}
+               {activeTab === 'evaluations' && (
+                 <form onSubmit={handleLmsSubmit} className="space-y-4">
+                    <div>
+                       <label className="block text-xs font-bold mb-1">Nombre Evaluación</label>
+                       <input required className="w-full p-2 border rounded text-slate-900 bg-white" value={evaluationForm.name} onChange={e => setEvaluationForm({...evaluationForm, name: e.target.value})} />
                     </div>
                     <div>
-                      <label className="block text-xs font-bold text-slate-500 mb-1">Área *</label>
-                      <select 
-                        required 
-                        value={userForm.areaId} 
-                        onChange={e => setUserForm({...userForm, areaId: e.target.value})}
-                        className="w-full p-2 border border-slate-300 rounded focus:border-brand-500 outline-none bg-white text-slate-800"
-                      >
-                        <option value="">Seleccionar...</option>
-                        {areas.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                      </select>
+                       <label className="block text-xs font-bold mb-1">Puntaje de Aprobación (%)</label>
+                       <input type="number" className="w-full p-2 border rounded text-slate-900 bg-white" value={evaluationForm.passingScore} onChange={e => setEvaluationForm({...evaluationForm, passingScore: Number(e.target.value)})} />
                     </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-500 mb-1">Jefe Directo</label>
-                    <select 
-                      value={userForm.bossId || ''} 
-                      onChange={e => setUserForm({...userForm, bossId: e.target.value})}
-                      className="w-full p-2 border border-slate-300 rounded focus:border-brand-500 outline-none bg-white text-slate-800"
-                    >
-                      <option value="">Ninguno</option>
-                      {users.filter(u => u.id !== userForm.id).map(u => (
-                        <option key={u.id} value={u.id}>{u.firstName} {u.lastName} - {u.role}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-500 mb-1">Foto de Perfil</label>
-                    <div className="flex items-center gap-4 p-4 border border-dashed border-slate-300 rounded-lg hover:bg-slate-50 cursor-pointer">
-                      <div className="w-12 h-12 bg-slate-200 rounded-full flex items-center justify-center text-slate-400">
-                        <Users size={24} />
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-sm font-medium text-slate-700">Click para subir imagen</p>
-                        <p className="text-xs text-slate-400">JPG, PNG (Max 2MB)</p>
-                      </div>
-                      <Upload size={20} className="text-slate-400"/>
+                    
+                    <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                       <h4 className="font-bold text-sm mb-2">{editingQuestionIndex !== null ? 'Editar Pregunta' : 'Agregar Pregunta'}</h4>
+                       <input className="w-full p-2 border rounded mb-2 text-slate-900 bg-white" placeholder="Texto de la pregunta" value={tempQuestion.text} onChange={e => setTempQuestion({...tempQuestion, text: e.target.value})} />
+                       <div className="grid grid-cols-2 gap-2 mb-2">
+                          <input className="p-2 border rounded text-slate-900 bg-white" placeholder="Opción 1" value={tempQuestion.options?.[0]} onChange={e => setTempQuestion({...tempQuestion, options: [e.target.value, tempQuestion.options?.[1] || '', tempQuestion.options?.[2] || '']})} />
+                          <input className="p-2 border rounded text-slate-900 bg-white" placeholder="Opción 2" value={tempQuestion.options?.[1]} onChange={e => setTempQuestion({...tempQuestion, options: [tempQuestion.options?.[0] || '', e.target.value, tempQuestion.options?.[2] || '']})} />
+                          <input className="p-2 border rounded text-slate-900 bg-white" placeholder="Opción 3" value={tempQuestion.options?.[2]} onChange={e => setTempQuestion({...tempQuestion, options: [tempQuestion.options?.[0] || '', tempQuestion.options?.[1] || '', e.target.value]})} />
+                          <select className="p-2 border rounded text-slate-900 bg-white" value={tempQuestion.correctIndex} onChange={e => setTempQuestion({...tempQuestion, correctIndex: Number(e.target.value)})}>
+                             <option value={0}>Correcta: Opción 1</option>
+                             <option value={1}>Correcta: Opción 2</option>
+                             <option value={2}>Correcta: Opción 3</option>
+                          </select>
+                       </div>
+                       <div className="flex gap-2">
+                           <button type="button" onClick={saveQuestion} className="text-xs bg-brand-800 text-white px-3 py-1 rounded hover:bg-brand-900">
+                             {editingQuestionIndex !== null ? 'Actualizar' : 'Agregar (+)'}
+                           </button>
+                           {editingQuestionIndex !== null && (
+                               <button type="button" onClick={() => { setEditingQuestionIndex(null); setTempQuestion({ text: '', options: ['', ''], correctIndex: 0 }); }} className="text-xs bg-slate-200 px-3 py-1 rounded hover:bg-slate-300">
+                                 Cancelar Edición
+                               </button>
+                           )}
+                       </div>
                     </div>
-                  </div>
 
-                  <div className="pt-4 flex justify-end gap-3 border-t border-slate-100">
-                    <button type="button" onClick={resetForm} className="px-4 py-2 text-slate-500 hover:bg-slate-100 rounded-lg">Cancelar</button>
-                    <button type="submit" className="px-6 py-2 bg-brand-800 text-white rounded-lg hover:bg-brand-900 font-medium">Guardar Usuario</button>
-                  </div>
-                </form>
-              ) : (activeTab === 'vehicles' || activeTab === 'machines') ? (
-                <form onSubmit={handleAssetSubmit} className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-500 mb-1">
-                      {activeTab === 'vehicles' ? 'Patente *' : 'Número de Serie *'}
-                    </label>
-                    <input 
-                      required 
-                      value={assetForm.identifier} 
-                      onChange={e => setAssetForm({...assetForm, identifier: e.target.value})}
-                      className="w-full p-2 border border-slate-300 rounded focus:border-brand-500 outline-none bg-white text-slate-800" 
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-500 mb-1">Marca *</label>
-                    <input 
-                      required 
-                      value={assetForm.brand} 
-                      onChange={e => setAssetForm({...assetForm, brand: e.target.value})}
-                      className="w-full p-2 border border-slate-300 rounded focus:border-brand-500 outline-none bg-white text-slate-800" 
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-500 mb-1">Modelo *</label>
-                    <input 
-                      required 
-                      value={assetForm.model} 
-                      onChange={e => setAssetForm({...assetForm, model: e.target.value})}
-                      className="w-full p-2 border border-slate-300 rounded focus:border-brand-500 outline-none bg-white text-slate-800" 
-                    />
-                  </div>
-                  <div className="pt-4 flex justify-end gap-3 border-t border-slate-100">
-                    <button type="button" onClick={resetForm} className="px-4 py-2 text-slate-500 hover:bg-slate-100 rounded-lg">Cancelar</button>
-                    <button type="submit" className="px-6 py-2 bg-brand-800 text-white rounded-lg hover:bg-brand-900 font-medium">Guardar {activeTab === 'vehicles' ? 'Vehículo' : 'Máquina'}</button>
-                  </div>
-                </form>
-              ) : (
-                <form onSubmit={handleSimpleSubmit} className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-500 mb-1">
-                        {activeTab === 'standards' || activeTab === 'risks' 
-                          ? 'Descripción *' 
-                          : 'Nombre del registro *'}
-                    </label>
-                    <input 
-                      required 
-                      value={simpleName} 
-                      onChange={e => setSimpleName(e.target.value)}
-                      className="w-full p-2 border border-slate-300 rounded focus:border-brand-500 outline-none bg-white text-slate-800" 
-                      placeholder={`Ingrese valor para ${getActiveTabTitle()}`}
-                    />
-                  </div>
-                  <div className="pt-4 flex justify-end gap-3 border-t border-slate-100">
-                    <button type="button" onClick={resetForm} className="px-4 py-2 text-slate-500 hover:bg-slate-100 rounded-lg">Cancelar</button>
-                    <button type="submit" className="px-6 py-2 bg-brand-800 text-white rounded-lg hover:bg-brand-900 font-medium">Guardar</button>
-                  </div>
-                </form>
-              )}
+                    <div className="space-y-2">
+                       {evaluationForm.questions?.map((q, idx) => (
+                          <div key={idx} className="text-xs bg-white border p-2 rounded flex justify-between items-center group hover:bg-slate-50">
+                             <div className="flex-1">
+                                <span className="font-semibold">{idx + 1}. {q.text}</span>
+                                <span className="block text-green-600 font-bold mt-1">Resp: {q.options[q.correctIndex]}</span>
+                             </div>
+                             <div className="flex gap-1">
+                                <button type="button" onClick={() => editQuestion(idx)} className="p-1.5 text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded">
+                                   <Edit2 size={14} />
+                                </button>
+                                <button type="button" onClick={() => deleteQuestion(idx)} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded">
+                                   <Trash2 size={14} />
+                                </button>
+                             </div>
+                          </div>
+                       ))}
+                       {(!evaluationForm.questions || evaluationForm.questions.length === 0) && (
+                         <p className="text-xs text-slate-400 italic text-center p-2">No hay preguntas cargadas</p>
+                       )}
+                    </div>
+
+                    <button type="submit" className="w-full bg-brand-800 text-white p-2 rounded">Guardar Evaluación</button>
+                 </form>
+               )}
+
+               {/* COURSE FORM */}
+               {activeTab === 'courses' && (
+                 <form onSubmit={handleLmsSubmit} className="space-y-4">
+                    <input required placeholder="Título del Curso" className="w-full p-2 border rounded text-slate-900 bg-white" value={courseForm.title} onChange={e => setCourseForm({...courseForm, title: e.target.value})} />
+                    <textarea placeholder="Descripción" className="w-full p-2 border rounded text-slate-900 bg-white" value={courseForm.description} onChange={e => setCourseForm({...courseForm, description: e.target.value})} />
+                    
+                    <div>
+                        <label className="block text-xs font-bold text-slate-500 mb-1">URL de Contenido (Video/PDF)</label>
+                        <div className="flex gap-2">
+                            <div className="relative flex-1">
+                                <Link size={16} className="absolute left-3 top-2.5 text-slate-400" />
+                                <input placeholder="https://..." className="w-full pl-9 p-2 border rounded text-slate-900 bg-white" value={courseForm.contentUrl} onChange={e => setCourseForm({...courseForm, contentUrl: e.target.value})} />
+                            </div>
+                            <button type="button" className="bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 rounded border border-slate-200" onClick={() => alert("Simulación de subida de archivo. En producción esto abriría el explorador.")}>
+                                <Upload size={16} />
+                            </button>
+                        </div>
+                        <p className="text-[10px] text-slate-400 mt-1">Pegue una URL de YouTube/Vimeo o cargue un archivo PDF</p>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                       <div>
+                          <label className="block text-xs font-bold text-slate-500">Vigencia (Meses)</label>
+                          <input type="number" className="w-full p-2 border rounded text-slate-900 bg-white" value={courseForm.validityMonths} onChange={e => setCourseForm({...courseForm, validityMonths: Number(e.target.value)})} />
+                       </div>
+                       <div>
+                          <label className="block text-xs font-bold text-slate-500">Evaluación Asociada</label>
+                          <select className="w-full p-2 border rounded text-slate-900 bg-white" value={courseForm.evaluationId} onChange={e => setCourseForm({...courseForm, evaluationId: e.target.value})}>
+                             <option value="">Sin evaluación</option>
+                             {evaluations.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                          </select>
+                       </div>
+                    </div>
+                    
+                    {/* New Flags */}
+                    <div className="flex gap-4">
+                       <label className="flex items-center gap-2 cursor-pointer">
+                          <input type="checkbox" className="w-4 h-4 text-brand-600" checked={courseForm.isOneTime || false} onChange={e => setCourseForm({...courseForm, isOneTime: e.target.checked})} />
+                          <span className="text-sm font-medium text-slate-700">Por única vez</span>
+                       </label>
+                       <label className="flex items-center gap-2 cursor-pointer">
+                          <input type="checkbox" className="w-4 h-4 text-brand-600" checked={courseForm.requiresPractical || false} onChange={e => setCourseForm({...courseForm, requiresPractical: e.target.checked})} />
+                          <span className="text-sm font-medium text-slate-700">Requiere Examen Práctico</span>
+                       </label>
+                    </div>
+
+                    <button type="submit" className="w-full bg-brand-800 text-white p-2 rounded">Guardar Curso</button>
+                 </form>
+               )}
+
+               {/* PLAN FORM */}
+               {activeTab === 'plans' && (
+                 <form onSubmit={handleLmsSubmit} className="space-y-4">
+                    <input required placeholder="Nombre del Plan" className="w-full p-2 border rounded text-slate-900 bg-white" value={planForm.name} onChange={e => setPlanForm({...planForm, name: e.target.value})} />
+                    
+                    <div>
+                       <label className="block text-xs font-bold mb-2">Puestos Asociados</label>
+                       <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto border p-2 rounded">
+                          {positions.map(p => (
+                             <button type="button" key={p.id} onClick={() => toggleSelection('positionIds', p.name)}
+                               className={`text-xs px-2 py-1 rounded border ${planForm.positionIds?.includes(p.name) ? 'bg-brand-100 border-brand-500 text-brand-800' : 'bg-slate-50'}`}>
+                               {p.name}
+                             </button>
+                          ))}
+                       </div>
+                    </div>
+                    <div>
+                       <label className="block text-xs font-bold mb-2">Cursos del Plan</label>
+                       <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto border p-2 rounded">
+                          {courses.map(c => (
+                             <button type="button" key={c.id} onClick={() => toggleSelection('courseIds', c.id)}
+                               className={`text-xs px-2 py-1 rounded border ${planForm.courseIds?.includes(c.id) ? 'bg-green-100 border-green-500 text-green-800' : 'bg-slate-50'}`}>
+                               {c.title}
+                             </button>
+                          ))}
+                       </div>
+                    </div>
+                    <button type="submit" className="w-full bg-brand-800 text-white p-2 rounded">Guardar Plan</button>
+                 </form>
+               )}
+
+               {/* GENERIC FORM */}
+               {['companies', 'areas', 'positions', 'standards', 'risks'].includes(activeTab) && (
+                 <form onSubmit={handleSimpleSubmit} className="space-y-4">
+                    <input required placeholder="Nombre" className="w-full p-2 border rounded text-slate-900 bg-white" value={simpleName} onChange={e => setSimpleName(e.target.value)} />
+                    <button type="submit" className="w-full bg-brand-800 text-white p-2 rounded">Guardar</button>
+                 </form>
+               )}
             </div>
           </div>
         </div>

@@ -1,4 +1,5 @@
-import React from 'react';
+
+import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   FileText, 
@@ -6,8 +7,12 @@ import {
   GraduationCap, 
   QrCode, 
   ArrowRight,
-  ShieldAlert
+  ShieldAlert,
+  Clock,
+  AlertCircle
 } from 'lucide-react';
+import { INITIAL_PLANS, INITIAL_COURSES } from './MasterData';
+import { UserTrainingProgress } from '../types';
 
 interface ModuleCardProps {
   title: string;
@@ -16,6 +21,7 @@ interface ModuleCardProps {
   path: string;
   colorClass: string;
   iconColorClass: string;
+  badges?: { label: string | number, color: string, icon?: React.ElementType }[];
 }
 
 const appModules = [
@@ -63,8 +69,36 @@ const appModules = [
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  // Mock user role for future implementation
-  const currentUserRole = 'Admin'; 
+  // Mock user for dashboard calculation
+  const CURRENT_USER_POSITION = "OPERARIO DE PRODUCCION - AFR";
+  const CURRENT_USER_ID = "27334";
+  
+  // Mock Progress for Dashboard (In a real app this would come from an API/Context)
+  const MOCK_PROGRESS_DASHBOARD: UserTrainingProgress[] = [
+    { userId: '27334', courseId: '1', status: 'PENDING', materialViewed: false }
+  ];
+
+  // Calculate stats for Training Badge
+  const trainingStats = useMemo(() => {
+    const myPlan = INITIAL_PLANS.find(p => p.positionIds.includes(CURRENT_USER_POSITION));
+    if (!myPlan) return { pending: 0, expiring: 0 };
+
+    const myCourses = INITIAL_COURSES.filter(c => myPlan.courseIds.includes(c.id));
+    
+    let pending = 0;
+    let expiring = 0; // Mock expiring logic
+
+    myCourses.forEach(course => {
+      const progress = MOCK_PROGRESS_DASHBOARD.find(p => p.courseId === course.id);
+      if (!progress || progress.status !== 'COMPLETED') {
+        pending++;
+      }
+      // Simulate an expiring course for demo
+      if (course.id === '3') expiring = 1; 
+    });
+
+    return { pending, expiring };
+  }, []);
 
   return (
     <div className="space-y-8">
@@ -98,7 +132,7 @@ const Dashboard = () => {
               className={`
                 group bg-white p-6 rounded-2xl border border-slate-200 shadow-sm 
                 text-left transition-all duration-300 transform hover:-translate-y-1 hover:shadow-lg
-                flex flex-col h-full
+                flex flex-col h-full relative
                 ${module.colorClass}
               `}
             >
@@ -114,9 +148,25 @@ const Dashboard = () => {
               <h3 className="text-xl font-bold text-slate-800 mb-2 group-hover:text-brand-800 transition-colors">
                 {module.title}
               </h3>
-              <p className="text-slate-500 text-sm leading-relaxed">
+              <p className="text-slate-500 text-sm leading-relaxed mb-4">
                 {module.description}
               </p>
+
+              {/* Dynamic Badges for Training */}
+              {module.id === 'training' && (
+                <div className="flex gap-2 mt-auto">
+                   {trainingStats.pending > 0 && (
+                     <span className="px-2 py-1 bg-red-100 text-red-700 text-xs font-bold rounded-full flex items-center gap-1">
+                       <AlertCircle size={12}/> {trainingStats.pending} Pendientes
+                     </span>
+                   )}
+                   {trainingStats.expiring > 0 && (
+                     <span className="px-2 py-1 bg-orange-100 text-orange-700 text-xs font-bold rounded-full flex items-center gap-1">
+                       <Clock size={12}/> {trainingStats.expiring} Por vencer
+                     </span>
+                   )}
+                </div>
+              )}
             </button>
           ))}
         </div>
@@ -133,7 +183,7 @@ const Dashboard = () => {
           <span className="text-sm">Sincronización: Al día</span>
         </div>
         <div className="flex items-center gap-3 text-slate-500">
-           <span className="text-sm">Versión 1.0.3</span>
+           <span className="text-sm">Versión 1.0.4</span>
         </div>
       </div>
     </div>

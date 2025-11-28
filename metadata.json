@@ -1,7 +1,8 @@
 {
   "name": "SafetyPro EHS Manager",
-  "description": "Comprehensive Health & Safety management system including Management of Change, Scaffolding Inspections, and Employee Training/Authorizations.",
+  "description": "Advanced H&S Management System featuring Kanban workflows for MOC and Scaffolding, intelligent LMS with shared evaluations, digital credentials, and geolocation tracking.",
   "requestFramePermissions": [
-    "camera"
+    "camera",
+    "geolocation"
   ]
 }

@@ -1,6 +1,8 @@
+
 import React, { useState } from 'react';
 import { Certification } from '../types';
-import { QrCode, Shield, Calendar, UserCheck } from 'lucide-react';
+import { QrCode, Shield, Calendar, UserCheck, ArrowLeft } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 const MOCK_CERTS: Certification[] = [
   { id: '1', name: 'Trabajo en Altura', issuedDate: '2023-01-15', expiryDate: '2024-01-15', status: 'active' },
@@ -9,6 +11,7 @@ const MOCK_CERTS: Certification[] = [
 ];
 
 const Badge = () => {
+  const navigate = useNavigate();
   const [mode, setMode] = useState<'view' | 'scan'>('view');
 
   const QR_DATA = "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=USER_ID_12345_TOKEN_XYZ";
@@ -37,7 +40,18 @@ const Badge = () => {
   }
 
   return (
-    <div className="grid lg:grid-cols-2 gap-8">
+    <div className="space-y-6">
+       <div className="flex items-center gap-3">
+          <button onClick={() => navigate('/')} className="bg-white p-2 rounded-full border border-slate-200 text-slate-500 hover:text-brand-800 hover:border-brand-300 transition-colors">
+            <ArrowLeft size={20} />
+          </button>
+          <div>
+            <h2 className="text-2xl font-bold text-slate-800">Mis Habilitaciones</h2>
+            <p className="text-slate-500">Credencial digital y estado de certificaciones.</p>
+          </div>
+       </div>
+
+    <div className="grid lg:grid-cols-2 gap-8 mt-4">
       {/* Digital ID Card */}
       <div className="flex flex-col items-center">
         <div className="bg-white w-full max-w-sm rounded-2xl shadow-xl overflow-hidden border border-slate-200">
@@ -129,6 +143,7 @@ const Badge = () => {
           </p>
         </div>
       </div>
+    </div>
     </div>
   );
 };
