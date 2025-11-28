@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { User, Company, Area, UserRole, UserProfile, JobPosition, Vehicle, Machine, StandardType, RiskType, Evaluation, Question, Course, TrainingPlan } from '../types';
 import { Plus, Search, Edit2, Trash2, Users, Building, MapPin, X, Upload, Briefcase, Truck, Wrench, ShieldAlert, FileText, GraduationCap, BookOpen, Layers, CheckSquare, Link, ArrowLeft, Database, Loader2 } from 'lucide-react';
@@ -128,9 +129,28 @@ const MasterData = () => {
   // Dynamic Data State
   const [data, setData] = useState<any[]>([]);
 
+  // Lookup Data State
+  const [companiesLookup, setCompaniesLookup] = useState<Company[]>([]);
+  const [areasLookup, setAreasLookup] = useState<Area[]>([]);
+
   const currentGroup = TAB_GROUPS.find(g => g.tabs.some(t => t.id === activeTab)) || TAB_GROUPS[0];
   const currentTabDef = currentGroup.tabs.find(t => t.id === activeTab);
   const collectionName = currentTabDef?.collection || 'users';
+
+  // --- FETCH LOOKUPS (Empresas y Areas) ---
+  useEffect(() => {
+    const fetchLookups = async () => {
+        try {
+            const compSnap = await getDocs(collection(db, 'companies'));
+            setCompaniesLookup(compSnap.docs.map(d => ({id: d.id, ...d.data()} as Company)));
+            const areaSnap = await getDocs(collection(db, 'areas'));
+            setAreasLookup(areaSnap.docs.map(d => ({id: d.id, ...d.data()} as Area)));
+        } catch(e) {
+            console.error("Error loading lookups", e);
+        }
+    }
+    fetchLookups();
+  }, []); // Run once on mount
 
   // --- FETCH DATA FROM FIRESTORE ---
   const fetchData = async () => {
@@ -139,9 +159,9 @@ const MasterData = () => {
       const querySnapshot = await getDocs(collection(db, collectionName));
       const items = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setData(items);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error fetching data:", error);
-      alert("Error de conexión con la base de datos.");
+      alert(`Error de conexión: ${error.message}`);
     } finally {
       setIsLoading(false);
     }
@@ -183,9 +203,9 @@ const MasterData = () => {
 
        alert("✅ Base de datos inicializada correctamente!");
        fetchData(); // Refresh current view
-    } catch (e) {
+    } catch (e: any) {
        console.error(e);
-       alert("Error al inicializar datos.");
+       alert(`Error al inicializar datos: ${e.message}`);
     } finally {
        setIsSeeding(false);
     }
@@ -226,9 +246,9 @@ const MasterData = () => {
       }
       await fetchData();
       resetForm();
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      alert("Error al guardar datos.");
+      alert(`Error al guardar datos: ${e.message}`);
     } finally {
       setIsLoading(false);
     }
@@ -239,8 +259,8 @@ const MasterData = () => {
       try {
           await deleteDoc(doc(db, collectionName, id));
           setData(prev => prev.filter(i => i.id !== id));
-      } catch (e) {
-          alert("Error al eliminar.");
+      } catch (e: any) {
+          alert(`Error al eliminar: ${e.message}`);
       }
   };
 
@@ -389,10 +409,41 @@ const MasterData = () => {
                         <input required placeholder="Nombre" className="w-full p-2 border rounded text-slate-900 bg-white" value={formData.firstName || ''} onChange={e => setFormData({...formData, firstName: e.target.value})} />
                         <input required placeholder="Apellido" className="w-full p-2 border rounded text-slate-900 bg-white" value={formData.lastName || ''} onChange={e => setFormData({...formData, lastName: e.target.value})} />
                         <input required type="email" placeholder="Email" className="w-full p-2 border rounded text-slate-900 bg-white" value={formData.emails?.[0] || ''} onChange={e => setFormData({...formData, emails: [e.target.value]})} />
-                        <select className="w-full p-2 border rounded text-slate-900 bg-white" value={formData.position || ''} onChange={e => setFormData({...formData, position: e.target.value})}>
+                        
+                        <div className="grid grid-cols-2 gap-4">
+                            <select required className="w-full p-2 border rounded text-slate-900 bg-white" value={formData.role || ''} onChange={e => setFormData({...formData, role: e.target.value})}>
+                                <option value="">Seleccione Rol...</option>
+                                <option value="Gerencia">Gerencia</option>
+                                <option value="Jefatura">Jefatura</option>
+                                <option value="Coordinador">Coordinador</option>
+                                <option value="Supervisor">Supervisor</option>
+                                <option value="Operario">Operario</option>
+                                <option value="Pasante">Pasante</option>
+                            </select>
+
+                            <select required className="w-full p-2 border rounded text-slate-900 bg-white" value={formData.profile || ''} onChange={e => setFormData({...formData, profile: e.target.value})}>
+                                <option value="">Seleccione Perfil...</option>
+                                <option value="Administrador">Administrador</option>
+                                <option value="Usuario">Usuario</option>
+                                <option value="Usuario Tercero">Usuario Tercero</option>
+                            </select>
+                        </div>
+
+                        <select required className="w-full p-2 border rounded text-slate-900 bg-white" value={formData.position || ''} onChange={e => setFormData({...formData, position: e.target.value})}>
                             <option value="">Seleccione Puesto...</option>
                             {INITIAL_JOB_POSITIONS_MOCK.map(p => <option key={p} value={p}>{p}</option>)}
                         </select>
+                        
+                        <div className="grid grid-cols-2 gap-4">
+                            <select required className="w-full p-2 border rounded text-slate-900 bg-white" value={formData.companyId || ''} onChange={e => setFormData({...formData, companyId: e.target.value})}>
+                                <option value="">Seleccione Empresa...</option>
+                                {companiesLookup.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                            </select>
+                            <select required className="w-full p-2 border rounded text-slate-900 bg-white" value={formData.areaId || ''} onChange={e => setFormData({...formData, areaId: e.target.value})}>
+                                <option value="">Seleccione Área...</option>
+                                {areasLookup.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                            </select>
+                        </div>
                      </>
                   )}
 
