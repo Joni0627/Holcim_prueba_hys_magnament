@@ -45,7 +45,11 @@ const Login = () => {
         setSuccess(`Se ha enviado un correo de recuperación a ${email}. Revise su bandeja de entrada.`);
     } catch (err: any) {
         console.error(err);
-        setError('Error al enviar correo de recuperación: ' + err.message);
+        if (err.code === 'auth/user-not-found') {
+            setError('Error: Este correo no tiene una cuenta de acceso. Contacte al administrador para crear el usuario en el sistema de seguridad.');
+        } else {
+            setError('Error al enviar correo de recuperación: ' + err.message);
+        }
     } finally {
         setLoading(false);
     }

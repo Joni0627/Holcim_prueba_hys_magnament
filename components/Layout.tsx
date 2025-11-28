@@ -18,7 +18,7 @@ const Layout = ({ children }: LayoutProps) => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const navigate = useNavigate();
   const location = useLocation();
-  const { logout, user } = useAuth();
+  const { logout, user, userProfile } = useAuth();
 
   useEffect(() => {
     // Initial check for screen size to decide sidebar state
@@ -48,6 +48,15 @@ const Layout = ({ children }: LayoutProps) => {
     }
   };
 
+  // Determine display name
+  const displayName = userProfile 
+    ? `${userProfile.firstName} ${userProfile.lastName}` 
+    : (user?.email?.split('@')[0] || 'Usuario');
+    
+  const displayRole = userProfile 
+    ? (userProfile.position || userProfile.role)
+    : user?.email;
+
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden">
       {/* Mobile Sidebar Overlay */}
@@ -72,8 +81,11 @@ const Layout = ({ children }: LayoutProps) => {
               </div>
               <span className="font-bold text-xl tracking-tight whitespace-nowrap">Management</span>
             </div>
-            <button onClick={() => setSidebarOpen(false)} className="text-slate-300 hover:text-white">
+            <button onClick={() => setSidebarOpen(false)} className="text-slate-300 hover:text-white lg:hidden">
               <X size={24} />
+            </button>
+            <button onClick={() => setSidebarOpen(false)} className="hidden lg:block text-slate-300 hover:text-white">
+               <X size={24} />
             </button>
           </div>
 
@@ -97,13 +109,13 @@ const Layout = ({ children }: LayoutProps) => {
           <div className="p-4 border-t border-brand-700 bg-brand-900 shrink-0">
             <div className="flex items-center gap-3 mb-4">
               <img 
-                src={user?.photoURL || "https://ui-avatars.com/api/?name=" + (user?.email || "User") + "&background=random"}
+                src={user?.photoURL || "https://ui-avatars.com/api/?name=" + (displayName || "User") + "&background=random"}
                 alt="User" 
                 className="w-10 h-10 rounded-full border-2 border-slate-400 shrink-0"
               />
               <div className="overflow-hidden">
-                <p className="text-sm font-semibold truncate">{user?.email?.split('@')[0] || 'Usuario'}</p>
-                <p className="text-xs text-slate-400 truncate">{user?.email}</p>
+                <p className="text-sm font-semibold truncate">{displayName}</p>
+                <p className="text-xs text-slate-400 truncate" title={displayRole || ''}>{displayRole}</p>
               </div>
             </div>
             <button 

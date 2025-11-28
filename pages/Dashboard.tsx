@@ -1,4 +1,3 @@
-
 import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -13,6 +12,7 @@ import {
 } from 'lucide-react';
 import { INITIAL_PLANS, INITIAL_COURSES } from './MasterData';
 import { UserTrainingProgress } from '../types';
+import { useAuth } from '../context/AuthContext';
 
 interface ModuleCardProps {
   title: string;
@@ -69,9 +69,13 @@ const appModules = [
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  // Mock user for dashboard calculation
-  const CURRENT_USER_POSITION = "OPERARIO DE PRODUCCION - AFR";
-  const CURRENT_USER_ID = "27334";
+  const { userProfile, user } = useAuth();
+
+  // Fallback if profile is not loaded yet
+  const displayName = userProfile?.firstName || 'Usuario';
+  
+  // Use real data from profile for logic, fallback to mock if needed for specific logic not yet connected
+  const CURRENT_USER_POSITION = userProfile?.position || "OPERARIO DE PRODUCCION - AFR";
   
   // Mock Progress for Dashboard (In a real app this would come from an API/Context)
   const MOCK_PROGRESS_DASHBOARD: UserTrainingProgress[] = [
@@ -98,14 +102,14 @@ const Dashboard = () => {
     });
 
     return { pending, expiring };
-  }, []);
+  }, [CURRENT_USER_POSITION]);
 
   return (
     <div className="space-y-8">
       {/* Welcome Section */}
       <div className="bg-brand-800 rounded-2xl p-8 text-white shadow-lg relative overflow-hidden">
         <div className="relative z-10">
-          <h1 className="text-3xl font-bold mb-2">Hola, Carlos</h1>
+          <h1 className="text-3xl font-bold mb-2">Hola, {displayName}</h1>
           <p className="text-brand-100 text-lg max-w-2xl">
             Bienvenido a <span className="font-semibold text-white">H&S Management</span>. 
             Seleccione un módulo para comenzar sus tareas de seguridad.
@@ -119,9 +123,16 @@ const Dashboard = () => {
 
       {/* Modules Grid */}
       <div>
-        <h2 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2">
-          <span className="w-2 h-8 bg-brand-800 rounded-full"></span>
-          Módulos Disponibles
+        <h2 className="text-xl font-bold text-slate-800 mb-6 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-8 bg-brand-800 rounded-full"></span>
+            Módulos Disponibles
+          </div>
+          {userProfile && (
+            <span className="text-xs bg-slate-200 text-slate-600 px-2 py-1 rounded">
+               Rol: {userProfile.role}
+            </span>
+          )}
         </h2>
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
