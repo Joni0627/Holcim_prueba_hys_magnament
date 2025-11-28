@@ -57,6 +57,9 @@ const Layout = ({ children }: LayoutProps) => {
     ? (userProfile.position || userProfile.role)
     : user?.email;
 
+  // Determine avatar URL with priority: Firestore Profile -> Firebase Auth -> Generated Initials
+  const avatarUrl = userProfile?.photoUrl || user?.photoURL || `https://ui-avatars.com/api/?name=${displayName || 'User'}&background=random`;
+
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden">
       {/* Mobile Sidebar Overlay */}
@@ -109,9 +112,9 @@ const Layout = ({ children }: LayoutProps) => {
           <div className="p-4 border-t border-brand-700 bg-brand-900 shrink-0">
             <div className="flex items-center gap-3 mb-4">
               <img 
-                src={user?.photoURL || "https://ui-avatars.com/api/?name=" + (displayName || "User") + "&background=random"}
+                src={avatarUrl}
                 alt="User" 
-                className="w-10 h-10 rounded-full border-2 border-slate-400 shrink-0"
+                className="w-10 h-10 rounded-full border-2 border-slate-400 shrink-0 object-cover bg-slate-100"
               />
               <div className="overflow-hidden">
                 <p className="text-sm font-semibold truncate">{displayName}</p>
