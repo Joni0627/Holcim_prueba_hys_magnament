@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { HashRouter, Routes, Route } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import MOC from './pages/MOC';
@@ -7,6 +7,8 @@ import Scaffolds from './pages/Scaffolds';
 import Training from './pages/Training';
 import Badge from './pages/Badge';
 import MasterData from './pages/MasterData';
+import Login from './pages/Login';
+import { AuthProvider, useAuth } from './context/AuthContext';
 
 const SplashScreen = ({ onComplete }: { onComplete: () => void }) => {
   useEffect(() => {
@@ -37,25 +39,66 @@ const SplashScreen = ({ onComplete }: { onComplete: () => void }) => {
   );
 };
 
-const App: React.FC = () => {
-  const [loading, setLoading] = useState(true);
+const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+  const { user, loading } = useAuth();
+  
+  if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="w-8 h-8 border-4 border-brand-800 border-t-transparent rounded-full animate-spin"></div></div>;
+  
+  if (!user) return <Navigate to="/login" />;
+  
+  return <>{children}</>;
+};
+
+const AppRoutes = () => {
+  const [showSplash, setShowSplash] = useState(true);
 
   return (
     <>
-      {loading && <SplashScreen onComplete={() => setLoading(false)} />}
+      {showSplash && <SplashScreen onComplete={() => setShowSplash(false)} />}
       <HashRouter>
-        <Layout>
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/master-data" element={<MasterData />} />
-            <Route path="/moc" element={<MOC />} />
-            <Route path="/scaffolds" element={<Scaffolds />} />
-            <Route path="/training" element={<Training />} />
-            <Route path="/badge" element={<Badge />} />
-          </Routes>
-        </Layout>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/" element={
+            <ProtectedRoute>
+              <Layout><Dashboard /></Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/master-data" element={
+            <ProtectedRoute>
+              <Layout><MasterData /></Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/moc" element={
+            <ProtectedRoute>
+              <Layout><MOC /></Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/scaffolds" element={
+            <ProtectedRoute>
+              <Layout><Scaffolds /></Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/training" element={
+            <ProtectedRoute>
+              <Layout><Training /></Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/badge" element={
+            <ProtectedRoute>
+              <Layout><Badge /></Layout>
+            </ProtectedRoute>
+          } />
+        </Routes>
       </HashRouter>
     </>
+  );
+}
+
+const App: React.FC = () => {
+  return (
+    <AuthProvider>
+      <AppRoutes />
+    </AuthProvider>
   );
 };
 
