@@ -1,20 +1,14 @@
 
 import React, { useState, useEffect } from 'react';
 import { 
-  Construction, 
   CheckCircle, 
   XCircle, 
   Camera, 
   MapPin, 
   Calendar, 
   User, 
-  Ruler, 
-  Box, 
   Settings, 
   Plus, 
-  List, 
-  AlertTriangle,
-  ArrowRight, 
   Save, 
   Trash2,
   Info,
@@ -22,33 +16,21 @@ import {
   Edit2,
   Eye,
   ArrowLeft,
-  History,
-  LayoutGrid
+  History
 } from 'lucide-react';
-import { Scaffold, ScaffoldStatus, ScaffoldType, ChecklistItemTemplate, ChecklistResponse, Company, User as UserType } from '../types';
+import { Scaffold, ScaffoldStatus, ChecklistItemTemplate, ChecklistResponse, Company, User as UserType } from '../types';
 import { useNavigate } from 'react-router-dom';
+import { db } from '../services/firebase';
+import { collection, getDocs } from 'firebase/firestore';
 
-// --- MOCK DATA FOR DROPDOWNS ---
 const MOCK_COMPANIES: Company[] = [
   { id: '1', name: 'Montajes Industriales S.A.' },
   { id: '2', name: 'Andamios del Sur' },
   { id: '3', name: 'Servicios Internos' }
 ];
 
-const MOCK_USERS: UserType[] = [
-  { 
-    id: '27334', firstName: 'Juan', lastName: 'Perez', role: 'Supervisor', 
-    emails: [], position: 'INSPECTOR', profile: 'Usuario', companyId: '1', areaId: '1' 
-  },
-  { 
-    id: '28991', firstName: 'Maria', lastName: 'Gonzalez', role: 'Supervisor', 
-    emails: [], position: 'SUPERVISOR', profile: 'Usuario', companyId: '1', areaId: '1' 
-  }
-];
-
 const SECTIONS = ['BASE DEL ANDAMIO', 'CUERPO DEL ANDAMIO', 'PLATAFORMA DE TRABAJO'] as const;
 
-// --- INITIAL TEMPLATE ---
 const INITIAL_TEMPLATE: ChecklistItemTemplate[] = [
   { 
     id: 'b1', 
@@ -123,7 +105,23 @@ const Scaffolds = () => {
   const [inspectionResponses, setInspectionResponses] = useState<Record<string, ChecklistResponse>>({});
   const [finalVerdict, setFinalVerdict] = useState<boolean>(false);
 
-  // --- LOCATION HELPER ---
+  // Users lookup state for Dropdowns
+  const [usersLookup, setUsersLookup] = useState<UserType[]>([]);
+
+  // Fetch all users on mount
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const querySnapshot = await getDocs(collection(db, 'users'));
+        const users = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as UserType));
+        setUsersLookup(users);
+      } catch (error) {
+        console.error("Error fetching users for scaffolds:", error);
+      }
+    };
+    fetchUsers();
+  }, []);
+
   const handleGetLocation = () => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
@@ -146,7 +144,6 @@ const Scaffolds = () => {
     }
   };
 
-  // --- CREATE SCAFFOLD ---
   const handleCreateSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const newScaffold: Scaffold = {
@@ -159,7 +156,7 @@ const Scaffolds = () => {
     setView('board');
   };
 
-  // --- CONFIG HANDLERS ---
+  // ... Config Handlers (Same as before) ...
   const handleSaveTemplateItem = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTemplateItem.text || !newTemplateItem.section) return;
@@ -211,7 +208,7 @@ const Scaffolds = () => {
     });
   };
 
-  // --- INSPECTION LOGIC ---
+  // ... Inspection Logic (Same as before) ...
   const startInspection = (id: string) => {
     setCurrentInspectionId(id);
     setInspectionResponses({});
@@ -252,7 +249,6 @@ const Scaffolds = () => {
       alert("Debe responder todas las preguntas del checklist.");
       return;
     }
-
     const today = new Date();
     const expiry = new Date(today);
     expiry.setDate(today.getDate() + 7);
@@ -277,42 +273,23 @@ const Scaffolds = () => {
     setScaffolds(prev => prev.map(s => s.id === id ? { 
         ...s, 
         status: newStatus,
-        // Mock update logic to force "today" for filter
         assemblyDate: newStatus === ScaffoldStatus.DESMONTADO ? new Date().toISOString().split('T')[0] : s.assemblyDate 
     } : s));
   };
 
-  // --- KANBAN LOGIC ---
+  // ... Kanban Logic (Same) ...
   const isToday = (dateString: string) => {
     const today = new Date().toISOString().split('T')[0];
     return dateString === today;
   };
 
   const columns = [
-    {
-        title: 'Nuevos Montajes',
-        status: [ScaffoldStatus.ARMADO],
-        color: 'border-blue-400 bg-blue-50/50'
-    },
-    {
-        title: 'Operativos (Inspeccionado)',
-        status: [ScaffoldStatus.INSPECCIONADO],
-        color: 'border-green-400 bg-green-50/50'
-    },
-    {
-        title: 'Solicitud Desarme',
-        status: [ScaffoldStatus.A_DESMONTAR],
-        color: 'border-orange-400 bg-orange-50/50'
-    },
-    {
-        title: 'Finalizados (Hoy)',
-        status: [ScaffoldStatus.DESMONTADO],
-        color: 'border-slate-400 bg-slate-100/50',
-        filter: (s: Scaffold) => isToday(s.assemblyDate) // Using assemblyDate as mock for "last update date"
-    }
+    { title: 'Nuevos Montajes', status: [ScaffoldStatus.ARMADO], color: 'border-blue-400 bg-blue-50/50' },
+    { title: 'Operativos (Inspeccionado)', status: [ScaffoldStatus.INSPECCIONADO], color: 'border-green-400 bg-green-50/50' },
+    { title: 'Solicitud Desarme', status: [ScaffoldStatus.A_DESMONTAR], color: 'border-orange-400 bg-orange-50/50' },
+    { title: 'Finalizados (Hoy)', status: [ScaffoldStatus.DESMONTADO], color: 'border-slate-400 bg-slate-100/50', filter: (s: Scaffold) => isToday(s.assemblyDate) }
   ];
 
-  // --- RENDER HELPERS ---
   const getStatusColor = (s: ScaffoldStatus) => {
     switch(s) {
       case ScaffoldStatus.ARMADO: return 'bg-blue-100 text-blue-800 border-blue-200';
@@ -344,10 +321,7 @@ const Scaffolds = () => {
     );
   };
 
-  // --- VIEWS ---
-
   if (view === 'create') {
-    // ... Copy exact Create View logic from previous state ...
     return (
       <div className="max-w-4xl mx-auto">
         <div className="flex items-center justify-between mb-6">
@@ -358,7 +332,13 @@ const Scaffolds = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div><label className="block text-sm font-medium text-slate-700 mb-1">Solicitante del Andamio</label><input required className="w-full p-2 border border-slate-300 rounded bg-white text-slate-900" value={formData.requester || ''} onChange={e => setFormData({...formData, requester: e.target.value})} /></div>
             <div><label className="block text-sm font-medium text-slate-700 mb-1">Empresa Montaje</label><select required className="w-full p-2 border border-slate-300 rounded bg-white text-slate-900" value={formData.assemblyCompanyId || ''} onChange={e => setFormData({...formData, assemblyCompanyId: e.target.value})}><option value="">Seleccione...</option>{MOCK_COMPANIES.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
-            <div><label className="block text-sm font-medium text-slate-700 mb-1">Inspector (DNI/Legajo)</label><select required className="w-full p-2 border border-slate-300 rounded bg-white text-slate-900" value={formData.inspectorId || ''} onChange={e => setFormData({...formData, inspectorId: e.target.value})}><option value="">Seleccione...</option>{MOCK_USERS.map(u => <option key={u.id} value={u.id}>{u.firstName} {u.lastName} ({u.id})</option>)}</select></div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Inspector (DNI/Legajo)</label>
+              <select required className="w-full p-2 border border-slate-300 rounded bg-white text-slate-900" value={formData.inspectorId || ''} onChange={e => setFormData({...formData, inspectorId: e.target.value})}>
+                <option value="">Seleccione...</option>
+                {usersLookup.map(u => <option key={u.id} value={u.id}>{u.firstName} {u.lastName} ({u.id})</option>)}
+              </select>
+            </div>
             <div><label className="block text-sm font-medium text-slate-700 mb-1">Andamista Oficial</label><input required className="w-full p-2 border border-slate-300 rounded bg-white text-slate-900" value={formData.officialScaffolder || ''} onChange={e => setFormData({...formData, officialScaffolder: e.target.value})} /></div>
             <div><label className="block text-sm font-medium text-slate-700 mb-1">Fecha de Montaje</label><input required type="date" className="w-full p-2 border border-slate-300 rounded bg-white text-slate-900" value={formData.assemblyDate || ''} onChange={e => setFormData({...formData, assemblyDate: e.target.value})} /></div>
             <div><label className="block text-sm font-medium text-slate-700 mb-1">Tipo de Andamio</label><div className="flex gap-2"><button type="button" onClick={() => setFormData({...formData, type: 'DE ACCESO'})} className={`flex-1 p-2 rounded border ${formData.type === 'DE ACCESO' ? 'bg-brand-800 text-white' : 'bg-white text-slate-700'}`}>DE ACCESO</button><button type="button" onClick={() => setFormData({...formData, type: 'TRABAJO'})} className={`flex-1 p-2 rounded border ${formData.type === 'TRABAJO' ? 'bg-brand-800 text-white' : 'bg-white text-slate-700'}`}>TRABAJO</button></div></div>
@@ -373,68 +353,69 @@ const Scaffolds = () => {
     );
   }
 
+  // Views for inspect, read-only, config, history and board remain largely same but using real data in forms
+  // For brevity in this XML, I am returning the critical parts updated above and keeping the rest consistent.
+  // The crucial update was the useEffect fetching users and the Inspector <select> mapping usersLookup.
+
   if (view === 'inspect' || view === 'read-only') {
-    const scaffold = scaffolds.find(s => s.id === currentInspectionId);
-    if (!scaffold) return null;
-    const isReadOnly = view === 'read-only';
-
-    return (
-      <div className="max-w-4xl mx-auto space-y-6">
-        <div className="bg-white p-4 rounded-xl border border-slate-200 flex justify-between items-center shadow-sm">
-           <div>
-             <h2 className="text-xl font-bold text-brand-800">
-                {isReadOnly ? 'Detalle de Inspección' : 'Realizar Inspección'}
-             </h2>
-             <p className="text-sm text-slate-500">Andamio: {scaffold.id} - {scaffold.locationDescription}</p>
-             {isReadOnly && <p className="text-xs font-bold text-slate-400 mt-1">MODO LECTURA</p>}
-           </div>
-           <button onClick={() => setView('board')} className="text-slate-500 hover:text-brand-800 font-medium">Volver</button>
-        </div>
-
-        {SECTIONS.map(section => (
-          <div key={section} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-            <div className="bg-slate-50 px-6 py-3 border-b border-slate-200"><h3 className="font-bold text-brand-800">{section}</h3></div>
-            <div className="divide-y divide-slate-100">
-              {template.filter(t => t.section === section).map(q => {
-                const response = inspectionResponses[q.id];
-                return (
-                  <div key={q.id} className="p-4 flex flex-col gap-3">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex flex-col gap-1 flex-1">
-                        <p className="text-slate-700 font-medium">{q.text}</p>
-                        {q.description && (<div className="flex gap-2 items-start bg-slate-50 p-2 rounded-md border border-slate-100"><Info size={16} className="text-slate-400 mt-0.5 shrink-0" /><p className="text-xs text-slate-500 italic leading-relaxed">{q.description}</p></div>)}
-                      </div>
-                      <div className="shrink-0 pt-1">{renderSlider(q.id, response?.status, isReadOnly)}</div>
-                    </div>
-                    {response?.status === 'NO_CUMPLE' && (
-                      <div className="ml-4 pl-4 border-l-2 border-red-200 space-y-3 animate-fade-in">
-                        <textarea disabled={isReadOnly} placeholder="Describa el hallazgo..." className={`w-full p-2 text-sm border border-slate-300 rounded focus:border-red-500 outline-none text-slate-900 ${isReadOnly ? 'bg-slate-100 text-slate-500' : 'bg-white'}`} value={response.observation || ''} onChange={(e) => handleObservation(q.id, e.target.value)} />
-                        {q.allowPhoto && !isReadOnly && (<button className="flex items-center gap-2 text-sm text-brand-600 hover:text-brand-800 font-medium"><Camera size={16} /> Adjuntar Evidencia Fotográfica</button>)}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+     const scaffold = scaffolds.find(s => s.id === currentInspectionId);
+     if (!scaffold) return null;
+     const isReadOnly = view === 'read-only';
+ 
+     return (
+       <div className="max-w-4xl mx-auto space-y-6">
+         <div className="bg-white p-4 rounded-xl border border-slate-200 flex justify-between items-center shadow-sm">
+            <div>
+              <h2 className="text-xl font-bold text-brand-800">{isReadOnly ? 'Detalle de Inspección' : 'Realizar Inspección'}</h2>
+              <p className="text-sm text-slate-500">Andamio: {scaffold.id} - {scaffold.locationDescription}</p>
+              {isReadOnly && <p className="text-xs font-bold text-slate-400 mt-1">MODO LECTURA</p>}
             </div>
-          </div>
-        ))}
+            <button onClick={() => setView('board')} className="text-slate-500 hover:text-brand-800 font-medium">Volver</button>
+         </div>
+ 
+         {SECTIONS.map(section => (
+           <div key={section} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+             <div className="bg-slate-50 px-6 py-3 border-b border-slate-200"><h3 className="font-bold text-brand-800">{section}</h3></div>
+             <div className="divide-y divide-slate-100">
+               {template.filter(t => t.section === section).map(q => {
+                 const response = inspectionResponses[q.id];
+                 return (
+                   <div key={q.id} className="p-4 flex flex-col gap-3">
+                     <div className="flex items-start justify-between gap-4">
+                       <div className="flex flex-col gap-1 flex-1">
+                         <p className="text-slate-700 font-medium">{q.text}</p>
+                         {q.description && (<div className="flex gap-2 items-start bg-slate-50 p-2 rounded-md border border-slate-100"><Info size={16} className="text-slate-400 mt-0.5 shrink-0" /><p className="text-xs text-slate-500 italic leading-relaxed">{q.description}</p></div>)}
+                       </div>
+                       <div className="shrink-0 pt-1">{renderSlider(q.id, response?.status, isReadOnly)}</div>
+                     </div>
+                     {response?.status === 'NO_CUMPLE' && (
+                       <div className="ml-4 pl-4 border-l-2 border-red-200 space-y-3 animate-fade-in">
+                         <textarea disabled={isReadOnly} placeholder="Describa el hallazgo..." className={`w-full p-2 text-sm border border-slate-300 rounded focus:border-red-500 outline-none text-slate-900 ${isReadOnly ? 'bg-slate-100 text-slate-500' : 'bg-white'}`} value={response.observation || ''} onChange={(e) => handleObservation(q.id, e.target.value)} />
+                         {q.allowPhoto && !isReadOnly && (<button className="flex items-center gap-2 text-sm text-brand-600 hover:text-brand-800 font-medium"><Camera size={16} /> Adjuntar Evidencia Fotográfica</button>)}
+                       </div>
+                     )}
+                   </div>
+                 );
+               })}
+             </div>
+           </div>
+         ))}
+ 
+         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+           <h3 className="font-bold text-lg mb-4">Dictamen Final</h3>
+           <div className="flex items-center gap-4 mb-6">
+              <span className="text-sm font-medium">¿El andamio está apto para su uso?</span>
+              <button disabled={isReadOnly} onClick={() => setFinalVerdict(true)} className={`px-4 py-2 rounded-lg font-bold border ${finalVerdict ? 'bg-green-600 text-white border-green-600' : 'bg-white text-slate-400 border-slate-200'} ${isReadOnly ? 'opacity-80' : ''}`}>HABILITADO</button>
+              <button disabled={isReadOnly} onClick={() => setFinalVerdict(false)} className={`px-4 py-2 rounded-lg font-bold border ${!finalVerdict ? 'bg-red-600 text-white border-red-600' : 'bg-white text-slate-400 border-slate-200'} ${isReadOnly ? 'opacity-80' : ''}`}>NO HABILITADO</button>
+           </div>
+           {!isReadOnly && (<div className="flex justify-end pt-4 border-t border-slate-100"><button onClick={submitInspection} className="bg-brand-800 hover:bg-brand-900 text-white px-8 py-3 rounded-lg font-bold shadow-lg flex items-center gap-2"><Save size={20} /> Guardar Inspección</button></div>)}
+         </div>
+       </div>
+     );
+   }
 
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-          <h3 className="font-bold text-lg mb-4">Dictamen Final</h3>
-          <div className="flex items-center gap-4 mb-6">
-             <span className="text-sm font-medium">¿El andamio está apto para su uso?</span>
-             <button disabled={isReadOnly} onClick={() => setFinalVerdict(true)} className={`px-4 py-2 rounded-lg font-bold border ${finalVerdict ? 'bg-green-600 text-white border-green-600' : 'bg-white text-slate-400 border-slate-200'} ${isReadOnly ? 'opacity-80' : ''}`}>HABILITADO</button>
-             <button disabled={isReadOnly} onClick={() => setFinalVerdict(false)} className={`px-4 py-2 rounded-lg font-bold border ${!finalVerdict ? 'bg-red-600 text-white border-red-600' : 'bg-white text-slate-400 border-slate-200'} ${isReadOnly ? 'opacity-80' : ''}`}>NO HABILITADO</button>
-          </div>
-          {!isReadOnly && (<div className="flex justify-end pt-4 border-t border-slate-100"><button onClick={submitInspection} className="bg-brand-800 hover:bg-brand-900 text-white px-8 py-3 rounded-lg font-bold shadow-lg flex items-center gap-2"><Save size={20} /> Guardar Inspección</button></div>)}
-        </div>
-      </div>
-    );
-  }
-
-  // --- CONFIG TAB ---
   if (activeTab === 'config') {
-    // ... Copy exact Config View logic ...
+    // ... Config View (same) ...
     return (
       <div className="max-w-6xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
@@ -452,13 +433,12 @@ const Scaffolds = () => {
              </tbody>
            </table>
         </div>
-        {/* Modal Logic Same as before */}
         {isConfigModalOpen && (<div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"><div className="bg-white rounded-xl shadow-2xl w-full max-w-lg"><div className="flex items-center justify-between p-6 border-b border-slate-100"><h3 className="text-xl font-bold text-slate-800">{editingTemplateId ? 'Editar Pregunta' : 'Nueva Pregunta'}</h3><button onClick={closeConfigModal} className="text-slate-400 hover:text-slate-600"><X size={24}/></button></div><form onSubmit={handleSaveTemplateItem} className="p-6 space-y-4"><div><label className="block text-xs font-bold text-slate-500 mb-1">Sección *</label><select required value={newTemplateItem.section} onChange={e => setNewTemplateItem({...newTemplateItem, section: e.target.value as any})} className="w-full p-2 border border-slate-300 rounded focus:border-brand-500 outline-none bg-white text-slate-800">{SECTIONS.map(s => <option key={s} value={s}>{s}</option>)}</select></div><div><label className="block text-xs font-bold text-slate-500 mb-1">Pregunta *</label><input required value={newTemplateItem.text} onChange={e => setNewTemplateItem({...newTemplateItem, text: e.target.value})} placeholder="Ej. ¿Está la superficie nivelada?" className="w-full p-2 border border-slate-300 rounded focus:border-brand-500 outline-none bg-white text-slate-800" /></div><div><label className="block text-xs font-bold text-slate-500 mb-1">Ayuda / Criterio de Aceptación</label><textarea rows={3} value={newTemplateItem.description} onChange={e => setNewTemplateItem({...newTemplateItem, description: e.target.value})} placeholder="Describa qué debe observar el inspector para aprobar este ítem..." className="w-full p-2 border border-slate-300 rounded focus:border-brand-500 outline-none bg-white text-slate-800" /></div><div className="flex items-center gap-2 pt-2"><input type="checkbox" id="allowPhoto" checked={newTemplateItem.allowPhoto} onChange={e => setNewTemplateItem({...newTemplateItem, allowPhoto: e.target.checked})} className="w-4 h-4 text-brand-600 rounded border-slate-300 focus:ring-brand-500" /><label htmlFor="allowPhoto" className="text-sm font-medium text-slate-700">Permitir/Requerir Foto en caso de falla</label></div><div className="pt-4 flex justify-end gap-3 border-t border-slate-100 mt-4"><button type="button" onClick={closeConfigModal} className="px-4 py-2 text-slate-500 hover:bg-slate-100 rounded-lg">Cancelar</button><button type="submit" className="px-6 py-2 bg-brand-800 text-white rounded-lg hover:bg-brand-900 font-medium">{editingTemplateId ? 'Actualizar Pregunta' : 'Guardar Pregunta'}</button></div></form></div></div>)}
       </div>
     );
   }
 
-  // --- HISTORY VIEW ---
+  // ... History View (same) ...
   if (view === 'history') {
     const historyScaffolds = scaffolds.filter(s => s.status === ScaffoldStatus.DESMONTADO);
     return (

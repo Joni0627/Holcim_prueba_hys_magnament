@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { User, Company, Area, UserRole, UserProfile, JobPosition, Vehicle, Machine, StandardType, RiskType, Evaluation, Question, Course, TrainingPlan } from '../types';
-import { Plus, Search, Edit2, Trash2, Users, Building, MapPin, X, Upload, Briefcase, Truck, Wrench, ShieldAlert, FileText, GraduationCap, BookOpen, Layers, CheckSquare, Link, ArrowLeft, Database, Loader2 } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Users, Building, MapPin, X, Upload, Briefcase, Truck, Wrench, ShieldAlert, FileText, GraduationCap, BookOpen, Layers, CheckSquare, Link, ArrowLeft, Database, Loader2, Info } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { db } from '../services/firebase';
 import { collection, getDocs, addDoc, updateDoc, doc, deleteDoc, setDoc } from 'firebase/firestore';
@@ -257,7 +257,11 @@ const MasterData = () => {
       resetForm();
     } catch (e: any) {
       console.error(e);
-      alert(`Error al guardar datos: ${e.message}`);
+      let errorMsg = `Error al guardar datos: ${e.message}`;
+      if (e.message.includes('permission-denied')) {
+        errorMsg = "Permisos insuficientes: Verifica las reglas de Firestore en la consola de Firebase.";
+      }
+      alert(errorMsg);
     } finally {
       setIsLoading(false);
     }
@@ -452,6 +456,22 @@ const MasterData = () => {
                                 <option value="">Seleccione Área...</option>
                                 {areasLookup.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
                             </select>
+                        </div>
+                        
+                        <input 
+                           type="url" 
+                           placeholder="URL de Foto de Perfil (Opcional)" 
+                           className="w-full p-2 border rounded text-slate-900 bg-white" 
+                           value={formData.photoUrl || ''} 
+                           onChange={e => setFormData({...formData, photoUrl: e.target.value})} 
+                        />
+
+                        <div className="bg-yellow-50 border border-yellow-200 rounded p-3 text-xs text-yellow-800 flex gap-2 items-start mt-2">
+                           <Info size={16} className="shrink-0 mt-0.5" />
+                           <p>
+                             <strong>Importante:</strong> Al guardar, recuerde crear también la cuenta en 
+                             <em> Firebase Authentication</em> con el mismo email para que el usuario pueda ingresar.
+                           </p>
                         </div>
                      </>
                   )}
