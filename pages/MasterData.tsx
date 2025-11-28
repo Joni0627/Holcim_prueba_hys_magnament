@@ -138,19 +138,28 @@ const MasterData = () => {
   const collectionName = currentTabDef?.collection || 'users';
 
   // --- FETCH LOOKUPS (Empresas y Areas) ---
-  useEffect(() => {
-    const fetchLookups = async () => {
-        try {
-            const compSnap = await getDocs(collection(db, 'companies'));
-            setCompaniesLookup(compSnap.docs.map(d => ({id: d.id, ...d.data()} as Company)));
-            const areaSnap = await getDocs(collection(db, 'areas'));
-            setAreasLookup(areaSnap.docs.map(d => ({id: d.id, ...d.data()} as Area)));
-        } catch(e) {
-            console.error("Error loading lookups", e);
-        }
+  const fetchLookups = async () => {
+    try {
+        const compSnap = await getDocs(collection(db, 'companies'));
+        setCompaniesLookup(compSnap.docs.map(d => ({id: d.id, ...d.data()} as Company)));
+        const areaSnap = await getDocs(collection(db, 'areas'));
+        setAreasLookup(areaSnap.docs.map(d => ({id: d.id, ...d.data()} as Area)));
+    } catch(e) {
+        console.error("Error loading lookups", e);
     }
+  };
+
+  // Ensure lookups are refreshed when switching to Users tab to catch any newly created Company/Area
+  useEffect(() => {
+    if (activeTab === 'users') {
+        fetchLookups();
+    }
+  }, [activeTab]);
+
+  // Initial fetch on mount
+  useEffect(() => {
     fetchLookups();
-  }, []); // Run once on mount
+  }, []);
 
   // --- FETCH DATA FROM FIRESTORE ---
   const fetchData = async () => {
