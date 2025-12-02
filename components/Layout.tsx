@@ -139,6 +139,7 @@ const Layout = ({ children }: LayoutProps) => {
               <img 
                 src={avatarUrl}
                 alt="User" 
+                referrerPolicy="no-referrer"
                 className="w-10 h-10 rounded-full border-2 border-slate-400 shrink-0 object-cover bg-slate-100"
               />
               <div className="overflow-hidden">

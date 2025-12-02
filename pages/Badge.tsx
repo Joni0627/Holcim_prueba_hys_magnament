@@ -60,6 +60,7 @@ const Badge = () => {
   }, [targetUserId]);
 
   // Redirect if no target ID and auth is done loading (guest user visiting /badge without param)
+  // This ensures public links (with uid) do NOT redirect to login, but empty /badge visits do.
   useEffect(() => {
     if (!authLoading && !targetUserId) {
         navigate('/login');
@@ -234,6 +235,7 @@ const Badge = () => {
               <img 
                 src={avatarUrl}
                 alt="Profile" 
+                referrerPolicy="no-referrer"
                 className="w-24 h-24 rounded-full border-4 border-white shadow-md bg-white object-cover"
               />
             </div>
