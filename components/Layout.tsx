@@ -1,10 +1,10 @@
+
 import React, { useState, useEffect } from 'react';
 import { 
   Menu, 
   X, 
   LayoutDashboard, 
   LogOut,
-  LogIn,
   Bell,
   Database,
   Loader2
@@ -17,7 +17,6 @@ interface LayoutProps {
 }
 
 // Helper to extract real image URL from Google Redirects
-// Updated to accept null to satisfy TypeScript strict checks with Firebase User
 const getCleanImageSrc = (url?: string | null) => {
   if (!url) return undefined;
   if (url.includes('google.com/imgres')) {
@@ -40,7 +39,6 @@ const Layout = ({ children }: LayoutProps) => {
   const { logout, user, userProfile, loading } = useAuth();
 
   useEffect(() => {
-    // Initial check for screen size to decide sidebar state
     if (window.innerWidth < 1024) {
       setSidebarOpen(false);
     }
@@ -71,7 +69,6 @@ const Layout = ({ children }: LayoutProps) => {
     }
   };
 
-  // --- LOADING STATE ---
   if (loading) {
     return (
       <div className="h-screen w-full bg-slate-50 flex items-center justify-center">
@@ -80,34 +77,30 @@ const Layout = ({ children }: LayoutProps) => {
     );
   }
 
-  // --- GUEST / PUBLIC LAYOUT ---
-  // If no user is logged in OR user is Anonymous (QR Scan guest), show simplified layout
+  // --- GUEST / PUBLIC LAYOUT (Resumen HTML) ---
   if (!user || user.isAnonymous) {
     return (
       <div className="min-h-screen bg-slate-100 flex flex-col font-sans text-slate-900">
-        {/* Simple Public Header */}
-        <header className="bg-brand-900 text-white p-4 shadow-md flex justify-center items-center relative z-10">
-          <div className="flex items-center gap-3">
-             <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-brand-900 font-black text-xl shadow-lg">H&S</div>
-             <div className="leading-tight">
-               <h1 className="font-bold text-lg tracking-wide">MANAGEMENT</h1>
-               <p className="text-[10px] text-brand-200 uppercase tracking-widest">Portal de Habilitaciones</p>
+        <header className="bg-white border-b border-slate-200 py-3 px-4 shadow-sm flex justify-center items-center sticky top-0 z-10">
+          <div className="flex items-center gap-2">
+             <div className="w-8 h-8 bg-brand-800 rounded-lg flex items-center justify-center text-white font-bold text-sm shadow-md">H&S</div>
+             <div className="leading-none">
+               <h1 className="font-bold text-slate-800 text-sm tracking-tight">H&S MANAGEMENT</h1>
+               <p className="text-[10px] text-slate-500 uppercase tracking-wide">Portal de Verificación</p>
              </div>
           </div>
         </header>
 
-        {/* Public Content Container */}
-        <main className="flex-1 overflow-y-auto p-4 md:p-8">
-          <div className="max-w-3xl mx-auto w-full">
+        <main className="flex-1 p-4 md:p-8">
+          <div className="max-w-xl mx-auto w-full">
             {children}
           </div>
         </main>
 
-        {/* Public Footer */}
-        <footer className="p-6 text-center text-slate-400 text-xs border-t border-slate-200 bg-slate-50">
-          <p className="font-semibold mb-1">© {new Date().getFullYear()} H&S Management System</p>
-          <p>Documento digital de carácter informativo.</p>
-          <button onClick={() => navigate('/login')} className="mt-4 text-brand-600 hover:underline">
+        <footer className="p-6 text-center text-slate-400 text-[10px] border-t border-slate-200 bg-slate-50">
+          <p className="font-medium mb-1">© {new Date().getFullYear()} H&S Management System</p>
+          <p>Documento digital generado automáticamente.</p>
+          <button onClick={() => navigate('/login')} className="mt-3 text-brand-600 hover:underline font-bold">
             Acceso Personal Interno
           </button>
         </footer>
@@ -116,8 +109,6 @@ const Layout = ({ children }: LayoutProps) => {
   }
 
   // --- AUTHENTICATED APP LAYOUT ---
-  
-  // Determine display name
   const displayName = userProfile 
     ? `${userProfile.firstName} ${userProfile.lastName}` 
     : (user ? user.email?.split('@')[0] : 'Usuario');
@@ -126,13 +117,11 @@ const Layout = ({ children }: LayoutProps) => {
     ? (userProfile.position || userProfile.role)
     : (user ? user.email : 'Acceso Privado');
 
-  // Determine avatar URL
   const rawAvatarUrl = userProfile?.photoUrl || user?.photoURL;
   const avatarUrl = getCleanImageSrc(rawAvatarUrl) || `https://ui-avatars.com/api/?name=${displayName || 'User'}&background=random`;
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden">
-      {/* Mobile Sidebar Overlay */}
       {sidebarOpen && (
         <div 
           className="fixed inset-0 z-40 bg-black/50 lg:hidden"
@@ -140,7 +129,6 @@ const Layout = ({ children }: LayoutProps) => {
         />
       )}
 
-      {/* Sidebar */}
       <aside className={`
         fixed inset-y-0 left-0 z-50 bg-brand-800 text-white transition-all duration-300 ease-in-out overflow-hidden
         lg:relative
@@ -203,9 +191,7 @@ const Layout = ({ children }: LayoutProps) => {
         </div>
       </aside>
 
-      {/* Main Content */}
       <main className="flex-1 flex flex-col h-full overflow-hidden w-full">
-        {/* Header */}
         <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 lg:px-8 shadow-sm z-10 shrink-0">
           <div className="flex items-center gap-4">
             <button 
@@ -214,7 +200,6 @@ const Layout = ({ children }: LayoutProps) => {
             >
               <Menu size={24} />
             </button>
-            
             <h1 className="text-lg font-semibold text-brand-800 lg:hidden">H&S Management</h1>
           </div>
 
@@ -226,7 +211,6 @@ const Layout = ({ children }: LayoutProps) => {
           </div>
         </header>
 
-        {/* Scrollable Content Area */}
         <div className="flex-1 overflow-y-auto p-4 lg:p-8 bg-slate-50">
           <div className="max-w-7xl mx-auto pb-20">
             {children}
