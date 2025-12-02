@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Certification, Course, UserTrainingProgress, User } from '../types';
-import { QrCode, Shield, Calendar, UserCheck, ArrowLeft, Loader2, ShieldAlert, ExternalLink, Info, Copy } from 'lucide-react';
+import { QrCode, Shield, Calendar, UserCheck, ArrowLeft, Loader2, ShieldAlert, Copy, Info, CheckCircle } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../services/firebase';
@@ -25,14 +25,16 @@ const getCleanImageSrc = (url?: string | null) => {
 const Badge = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { userProfile, loading: authLoading } = useAuth();
+  const { userProfile, loading: authLoading, user } = useAuth();
   
   // Logic to determine which user we are viewing
   const paramUid = searchParams.get('uid');
   // Use param ID if available, otherwise use logged in ID
   const targetUserId = paramUid || userProfile?.id;
-  // If param is present, we are viewing someone else (or ourselves via link), so we are in "Viewer Mode" unless IDs match
-  const isSelf = !paramUid || (userProfile && paramUid === userProfile.id);
+  // If param is present, we are viewing someone else (or ourselves via link)
+  // If param is NOT present, we are viewing our own badge from the dashboard
+  const isPublicView = !!paramUid;
+  const isSelf = userProfile && userProfile.id === targetUserId;
 
   const [mode, setMode] = useState<'view' | 'scan'>('view');
   const [isLoading, setIsLoading] = useState(true);
@@ -60,7 +62,6 @@ const Badge = () => {
   }, [targetUserId]);
 
   // Redirect if no target ID and auth is done loading (guest user visiting /badge without param)
-  // This ensures public links (with uid) do NOT redirect to login, but empty /badge visits do.
   useEffect(() => {
     if (!authLoading && !targetUserId) {
         navigate('/login');
@@ -89,7 +90,7 @@ const Badge = () => {
             if (userSnap.exists()) {
                 setTargetUser({ id: userSnap.id, ...userSnap.data() } as User);
             } else {
-                setError("El usuario especificado no existe o ha sido eliminado.");
+                setError("El ID de operario especificado no se encuentra en el sistema.");
                 return;
             }
         }
@@ -131,9 +132,9 @@ const Badge = () => {
       } catch (error: any) {
          console.error("Error loading badge:", error);
          if (error.code === 'permission-denied') {
-             setError("Acceso Restringido. Es posible que las reglas de seguridad de la base de datos no permitan el acceso público. Contacte al administrador.");
+             setError("Acceso Restringido. El perfil de este operario no es público o su sesión ha expirado.");
          } else {
-             setError("Error al cargar la información del operario.");
+             setError("Error técnico al cargar la información del operario.");
          }
       } finally {
          setIsLoading(false);
@@ -161,15 +162,14 @@ const Badge = () => {
 
   if (mode === 'scan') {
     return (
-      <div className="max-w-md mx-auto text-center space-y-6">
-        <h2 className="text-2xl font-bold text-slate-800">Modo Supervisor</h2>
+      <div className="max-w-md mx-auto text-center space-y-6 animate-fade-in">
+        <h2 className="text-2xl font-bold text-slate-800">Escáner de Validación</h2>
         <p className="text-slate-500">Escanee el QR del operario para ver habilitaciones.</p>
         
-        <div className="bg-black rounded-xl overflow-hidden aspect-square relative flex items-center justify-center shadow-lg">
-            {/* Simulation of Camera Feed */}
+        <div className="bg-black rounded-xl overflow-hidden aspect-square relative flex items-center justify-center shadow-lg mx-auto w-full max-w-xs">
             <div className="absolute inset-0 bg-slate-900 opacity-80"></div>
-            <div className="absolute w-64 h-64 border-2 border-safety-500 rounded-lg z-10 animate-pulse"></div>
-            <p className="text-white z-20 font-mono text-sm px-4">Apunte la cámara al código QR de la credencial...</p>
+            <div className="absolute w-48 h-48 border-2 border-safety-500 rounded-lg z-10 animate-pulse"></div>
+            <p className="text-white z-20 font-mono text-xs px-4">Apunte la cámara al código QR...</p>
         </div>
 
         <button 
@@ -184,25 +184,31 @@ const Badge = () => {
 
   if (isLoading || authLoading) {
       return (
-          <div className="flex justify-center items-center h-64">
+          <div className="flex flex-col justify-center items-center h-64 gap-4">
               <Loader2 className="animate-spin text-brand-600" size={40} />
+              <p className="text-slate-400 font-medium text-sm">Validando credencial digital...</p>
           </div>
       );
   }
 
   if (error) {
       return (
-        <div className="flex flex-col items-center justify-center h-64 text-center px-4 animate-fade-in">
-            <ShieldAlert className="text-red-500 mb-4" size={48} />
-            <h3 className="text-lg font-bold text-slate-800 mb-2">No Disponible</h3>
-            <p className="text-slate-500 mb-6 max-w-sm">{error}</p>
-            {!userProfile && (
-                <button onClick={() => navigate('/login')} className="bg-brand-800 text-white px-6 py-2 rounded-lg font-bold shadow-lg hover:bg-brand-900">
-                    Iniciar Sesión
-                </button>
+        <div className="flex flex-col items-center justify-center min-h-[50vh] text-center px-4 animate-fade-in">
+            <div className="bg-red-50 p-6 rounded-full mb-6">
+               <ShieldAlert className="text-red-500" size={48} />
+            </div>
+            <h3 className="text-2xl font-bold text-slate-800 mb-2">Consulta No Disponible</h3>
+            <p className="text-slate-500 mb-8 max-w-sm">{error}</p>
+            
+            {!user && (
+                <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 text-sm text-slate-500 max-w-sm">
+                   <p className="mb-2"><strong>Nota para Supervisores:</strong></p>
+                   <p>Si la base de datos es privada, debe iniciar sesión en el sistema para poder visualizar los datos del operario.</p>
+                </div>
             )}
-            {userProfile && (
-                <button onClick={() => navigate('/')} className="text-brand-600 font-medium hover:underline">
+            
+            {user && (
+                 <button onClick={() => navigate('/')} className="mt-6 text-brand-600 font-medium hover:underline">
                     Volver al Inicio
                 </button>
             )}
@@ -212,25 +218,35 @@ const Badge = () => {
 
   return (
     <div className="space-y-6 animate-fade-in">
-       <div className="flex items-center gap-3">
-          <button onClick={() => navigate('/')} className="bg-white p-2 rounded-full border border-slate-200 text-slate-500 hover:text-brand-800 hover:border-brand-300 transition-colors">
-            <ArrowLeft size={20} />
-          </button>
-          <div>
-            <h2 className="text-2xl font-bold text-slate-800">
-                {isSelf ? 'Mis Habilitaciones' : 'Credencial de Operario'}
-            </h2>
-            <p className="text-slate-500">
-                {isSelf ? 'Credencial digital y estado de certificaciones.' : 'Vista de supervisor - resumen de formación.'}
-            </p>
-          </div>
-       </div>
+       {/* Only show navigation header if NOT in public/guest view */}
+       {!isPublicView && (
+           <div className="flex items-center gap-3">
+              <button onClick={() => navigate('/')} className="bg-white p-2 rounded-full border border-slate-200 text-slate-500 hover:text-brand-800 hover:border-brand-300 transition-colors">
+                <ArrowLeft size={20} />
+              </button>
+              <div>
+                <h2 className="text-2xl font-bold text-slate-800">
+                    Mis Habilitaciones
+                </h2>
+                <p className="text-slate-500">
+                    Credencial digital y estado de certificaciones.
+                </p>
+              </div>
+           </div>
+       )}
+       
+       {isPublicView && (
+           <div className="text-center mb-8">
+               <h2 className="text-3xl font-bold text-brand-900 mb-2">Habilitación Operativa</h2>
+               <p className="text-slate-500">Resumen de competencias técnicas y seguridad.</p>
+           </div>
+       )}
 
-    <div className="grid lg:grid-cols-2 gap-8 mt-4">
+    <div className="grid lg:grid-cols-2 gap-8 mt-4 items-start">
       {/* Digital ID Card */}
       <div className="flex flex-col items-center">
-        <div className="bg-white w-full max-w-sm rounded-2xl shadow-xl overflow-hidden border border-slate-200 relative group">
-          <div className="bg-brand-800 h-24 relative">
+        <div className="bg-white w-full max-w-sm rounded-2xl shadow-xl overflow-hidden border border-slate-200 relative group transition-transform hover:scale-[1.01] duration-300">
+          <div className="bg-gradient-to-r from-brand-800 to-brand-700 h-28 relative">
             <div className="absolute -bottom-12 left-1/2 transform -translate-x-1/2">
               <img 
                 src={avatarUrl}
@@ -239,9 +255,14 @@ const Badge = () => {
                 className="w-24 h-24 rounded-full border-4 border-white shadow-md bg-white object-cover"
               />
             </div>
-            {!isSelf && (
-                <div className="absolute top-2 right-2 bg-yellow-400 text-yellow-900 text-xs font-bold px-2 py-1 rounded shadow animate-pulse">
-                    MODO VISOR
+            {isPublicView && (
+                <div className="absolute top-3 right-3 flex flex-col items-end gap-1">
+                    <div className="bg-white/20 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-1 rounded border border-white/30">
+                        VISTA PÚBLICA
+                    </div>
+                    <div className="text-white/60 text-[10px] font-mono">
+                        {new Date().toLocaleDateString()}
+                    </div>
                 </div>
             )}
           </div>
@@ -249,66 +270,65 @@ const Badge = () => {
             <h2 className="text-2xl font-bold text-slate-800">
                 {targetUser ? `${targetUser.firstName} ${targetUser.lastName}` : 'Usuario Desconocido'}
             </h2>
-            <p className="text-slate-500 font-medium">{targetUser?.position || 'Sin puesto asignado'}</p>
-            <p className="text-xs text-slate-400 mt-1 font-mono">ID: {targetUser?.id}</p>
+            <p className="text-brand-600 font-bold text-sm tracking-wide mt-1 uppercase">{targetUser?.position || 'Sin puesto asignado'}</p>
+            <div className="inline-block bg-slate-100 px-3 py-1 rounded-full mt-2">
+                <p className="text-xs text-slate-500 font-mono tracking-wider">ID: {targetUser?.id}</p>
+            </div>
 
-            <div className="mt-6 flex justify-center flex-col items-center gap-2">
-              <div className="p-2 bg-white border border-slate-100 rounded-lg shadow-inner">
-                {QR_DATA_IMG && <img src={QR_DATA_IMG} alt="User QR" className="w-48 h-48" />}
+            <div className="mt-8 flex justify-center flex-col items-center gap-4">
+              {/* Only show QR code if viewing own badge, or simplify for public view */}
+              <div className="p-3 bg-white border border-slate-100 rounded-xl shadow-inner">
+                {QR_DATA_IMG && <img src={QR_DATA_IMG} alt="User QR" className="w-40 h-40 mix-blend-multiply" />}
               </div>
               
-              {/* URL Display and Debug Info */}
-              <div className="mt-4 w-full text-left bg-slate-50 p-3 rounded-lg border border-slate-200">
-                 <div className="flex justify-between items-center mb-1">
-                    <span className="text-[10px] font-bold text-slate-500 uppercase">Enlace de Validación</span>
-                    <button onClick={handleCopyUrl} className="text-brand-600 hover:text-brand-800 flex items-center gap-1 text-[10px] font-bold" title="Copiar enlace">
-                        <Copy size={12} /> COPIAR
-                    </button>
-                 </div>
-                 <p className="text-[9px] text-slate-400 font-mono break-all leading-tight bg-white p-1 rounded border border-slate-100">
-                    {qrUrl}
-                 </p>
-                 
-                 {/* Warning for Preview Environments */}
-                 {(qrUrl.includes('usercontent.goog') || qrUrl.includes('webcontainer') || qrUrl.includes('stackblitz') || qrUrl.includes('localhost')) && (
-                     <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                        <h4 className="text-xs font-bold text-blue-800 flex items-center gap-2 mb-1">
-                            <Info size={14} /> Modo Desarrollo Detectado
-                        </h4>
-                        <p className="text-[10px] text-blue-700 leading-relaxed">
-                           Estás ejecutando la app en un entorno privado. 
-                           <strong> El enlace QR probablemente NO funcionará en tu celular</strong> porque requiere acceso autenticado a la nube de desarrollo.
-                           <br/><br/>
-                           Para que el QR sea accesible públicamente para cualquier persona:
-                           <strong> Debes publicar (Deploy) la aplicación</strong> en un servidor real como Firebase Hosting o Vercel.
-                        </p>
+              {/* URL Display only for internal user to share */}
+              {!isPublicView && (
+                  <div className="w-full text-left bg-slate-50 p-3 rounded-lg border border-slate-200">
+                     <div className="flex justify-between items-center mb-1">
+                        <span className="text-[10px] font-bold text-slate-500 uppercase">Enlace de Validación</span>
+                        <button onClick={handleCopyUrl} className="text-brand-600 hover:text-brand-800 flex items-center gap-1 text-[10px] font-bold" title="Copiar enlace">
+                            <Copy size={12} /> COPIAR
+                        </button>
                      </div>
-                 )}
-              </div>
-
+                     <p className="text-[9px] text-slate-400 font-mono break-all leading-tight bg-white p-1 rounded border border-slate-100">
+                        {qrUrl}
+                     </p>
+                     
+                     {(qrUrl.includes('usercontent.goog') || qrUrl.includes('webcontainer') || qrUrl.includes('localhost')) && (
+                         <div className="mt-3 p-2 bg-blue-50 border border-blue-100 rounded text-[10px] text-blue-700">
+                             <strong className="block mb-1"><Info size={10} className="inline mr-1"/>Modo Desarrollo</strong>
+                             Este QR solo funcionará si la app está publicada (Deploy).
+                         </div>
+                     )}
+                  </div>
+              )}
             </div>
-            <p className="text-xs text-slate-400 mt-2">
-                {isSelf ? 'Presente este código para validación en campo' : 'Código de validación del operario'}
-            </p>
+            
+            {isPublicView && (
+                <p className="text-xs text-slate-400 mt-4 italic">
+                    Escanee este código para verificar la autenticidad de esta credencial en tiempo real.
+                </p>
+            )}
           </div>
-          <div className="bg-slate-50 p-4 border-t border-slate-100 flex justify-center gap-4">
+          
+          <div className="bg-slate-50 p-4 border-t border-slate-100 flex justify-center gap-8">
              <div className="text-center">
-                <span className={`block text-xl font-bold ${compliance === 100 ? 'text-green-600' : 'text-orange-500'}`}>{compliance}%</span>
-                <span className="text-[10px] uppercase text-slate-500 font-bold">Cumplimiento</span>
+                <span className={`block text-2xl font-black ${compliance === 100 ? 'text-green-600' : 'text-orange-500'}`}>{compliance}%</span>
+                <span className="text-[10px] uppercase text-slate-500 font-bold tracking-wider">Cumplimiento</span>
              </div>
              <div className="w-px bg-slate-200"></div>
              <div className="text-center">
-                <span className="block text-xl font-bold text-brand-800">{activeCerts}</span>
-                <span className="text-[10px] uppercase text-slate-500 font-bold">Vigentes</span>
+                <span className="block text-2xl font-black text-brand-800">{activeCerts}</span>
+                <span className="text-[10px] uppercase text-slate-500 font-bold tracking-wider">Habilitaciones</span>
              </div>
           </div>
         </div>
         
         {/* Only show "I am Supervisor" button if logged in as the user (looking at own badge) */}
-        {isSelf && userProfile && (
+        {!isPublicView && isSelf && (
             <button 
             onClick={() => setMode('scan')}
-            className="mt-6 flex items-center gap-2 text-slate-600 hover:text-brand-800 font-medium"
+            className="mt-6 flex items-center gap-2 text-slate-600 hover:text-brand-800 font-medium py-2 px-4 rounded-lg hover:bg-slate-100 transition-colors"
             >
             <UserCheck size={20} /> Soy Supervisor (Escanear otro usuario)
             </button>
@@ -317,39 +337,45 @@ const Badge = () => {
 
       {/* Certifications List */}
       <div className="space-y-6">
-        <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-          <Shield className="text-safety-600" /> Habilitaciones Registradas
+        <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2 pb-2 border-b border-slate-100">
+          <Shield className="text-safety-600" /> Detalle de Habilitaciones
         </h3>
 
-        <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+        <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
           {certifications.length === 0 && (
-              <div className="p-6 text-center border-2 border-dashed border-slate-200 rounded-xl text-slate-400">
-                  No se encontraron certificaciones completadas.
+              <div className="p-8 text-center border-2 border-dashed border-slate-200 rounded-xl bg-slate-50">
+                  <ShieldAlert className="mx-auto text-slate-300 mb-2" size={32} />
+                  <p className="text-slate-500 font-medium">No se encontraron certificaciones registradas.</p>
               </div>
           )}
           {certifications.map((cert) => (
             <div 
               key={cert.id} 
-              className={`p-4 rounded-xl border flex items-center justify-between transition-all ${
+              className={`p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all ${
                 cert.status === 'active' 
-                  ? 'bg-white border-green-200 shadow-sm hover:shadow-md' 
-                  : 'bg-slate-50 border-slate-200 opacity-75'
+                  ? 'bg-white border-green-200 shadow-sm' 
+                  : 'bg-slate-50 border-slate-200 opacity-75 grayscale-[0.5]'
               }`}
             >
-              <div>
-                <h4 className="font-bold text-slate-800">{cert.name}</h4>
-                <div className="flex gap-4 mt-1 text-sm text-slate-500">
-                  <span className="flex items-center gap-1"><Calendar size={14}/> Emitido: {cert.issuedDate}</span>
-                  <span className="flex items-center gap-1"><Calendar size={14}/> Vence: {cert.expiryDate}</span>
-                </div>
+              <div className="flex items-start gap-3">
+                 <div className={`mt-1 ${cert.status === 'active' ? 'text-green-500' : 'text-slate-400'}`}>
+                    <CheckCircle size={20} />
+                 </div>
+                 <div>
+                    <h4 className="font-bold text-slate-800 text-base">{cert.name}</h4>
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-sm text-slate-500">
+                      <span className="flex items-center gap-1"><Calendar size={12}/> Emitido: {cert.issuedDate}</span>
+                      <span className="flex items-center gap-1"><Calendar size={12}/> Vence: {cert.expiryDate}</span>
+                    </div>
+                 </div>
               </div>
-              <div>
+              <div className="shrink-0 self-start sm:self-center">
                 {cert.status === 'active' ? (
-                  <span className="px-3 py-1 bg-green-100 text-green-700 text-xs font-bold rounded-full border border-green-200 shadow-sm">
+                  <span className="px-3 py-1 bg-green-100 text-green-700 text-xs font-bold rounded-full border border-green-200 shadow-sm whitespace-nowrap">
                     VIGENTE
                   </span>
                 ) : (
-                  <span className="px-3 py-1 bg-red-100 text-red-700 text-xs font-bold rounded-full border border-red-200">
+                  <span className="px-3 py-1 bg-red-100 text-red-700 text-xs font-bold rounded-full border border-red-200 whitespace-nowrap">
                     VENCIDO
                   </span>
                 )}
@@ -359,12 +385,12 @@ const Badge = () => {
         </div>
 
         {certifications.some(c => c.status === 'expired') && (
-            <div className="bg-red-50 p-4 rounded-lg border border-red-100 flex gap-3">
-            <Shield className="text-red-500 shrink-0" />
+            <div className="bg-red-50 p-4 rounded-lg border border-red-100 flex gap-3 animate-fade-in">
+            <ShieldAlert className="text-red-500 shrink-0 mt-0.5" />
             <div>
-                <h4 className="text-red-800 font-bold mb-1">Atención Requerida</h4>
-                <p className="text-sm text-red-700">
-                    El usuario posee certificaciones vencidas. Se requiere programar recertificación inmediata para habilitar tareas críticas.
+                <h4 className="text-red-800 font-bold mb-1 text-sm">Alerta de Conformidad</h4>
+                <p className="text-xs text-red-700 leading-relaxed">
+                    El usuario posee certificaciones vencidas o pendientes de reválida. Algunas tareas operativas podrían estar restringidas.
                 </p>
             </div>
             </div>

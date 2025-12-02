@@ -6,7 +6,8 @@ import {
   LogOut,
   LogIn,
   Bell,
-  Database
+  Database,
+  Loader2
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -36,7 +37,7 @@ const Layout = ({ children }: LayoutProps) => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const navigate = useNavigate();
   const location = useLocation();
-  const { logout, user, userProfile } = useAuth();
+  const { logout, user, userProfile, loading } = useAuth();
 
   useEffect(() => {
     // Initial check for screen size to decide sidebar state
@@ -70,18 +71,63 @@ const Layout = ({ children }: LayoutProps) => {
     }
   };
 
-  // Determine display name (Handle Guest)
-  const isGuest = !user;
+  // --- LOADING STATE ---
+  if (loading) {
+    return (
+      <div className="h-screen w-full bg-slate-50 flex items-center justify-center">
+        <Loader2 className="animate-spin text-brand-800" size={40} />
+      </div>
+    );
+  }
+
+  // --- GUEST / PUBLIC LAYOUT ---
+  // If no user is logged in, we show a simplified layout (Certificate View)
+  // This is used for QR Code scans by external personnel
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-slate-100 flex flex-col font-sans text-slate-900">
+        {/* Simple Public Header */}
+        <header className="bg-brand-900 text-white p-4 shadow-md flex justify-center items-center relative z-10">
+          <div className="flex items-center gap-3">
+             <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-brand-900 font-black text-xl shadow-lg">H&S</div>
+             <div className="leading-tight">
+               <h1 className="font-bold text-lg tracking-wide">MANAGEMENT</h1>
+               <p className="text-[10px] text-brand-200 uppercase tracking-widest">Portal de Habilitaciones</p>
+             </div>
+          </div>
+        </header>
+
+        {/* Public Content Container */}
+        <main className="flex-1 overflow-y-auto p-4 md:p-8">
+          <div className="max-w-3xl mx-auto w-full">
+            {children}
+          </div>
+        </main>
+
+        {/* Public Footer */}
+        <footer className="p-6 text-center text-slate-400 text-xs border-t border-slate-200 bg-slate-50">
+          <p className="font-semibold mb-1">© {new Date().getFullYear()} H&S Management System</p>
+          <p>Documento digital de carácter informativo.</p>
+          <button onClick={() => navigate('/login')} className="mt-4 text-brand-600 hover:underline">
+            Acceso Personal Interno
+          </button>
+        </footer>
+      </div>
+    );
+  }
+
+  // --- AUTHENTICATED APP LAYOUT ---
+  
+  // Determine display name
   const displayName = userProfile 
     ? `${userProfile.firstName} ${userProfile.lastName}` 
-    : (user ? user.email?.split('@')[0] : 'Invitado');
+    : (user ? user.email?.split('@')[0] : 'Usuario');
     
   const displayRole = userProfile 
     ? (userProfile.position || userProfile.role)
-    : (user ? user.email : 'Acceso Público');
+    : (user ? user.email : 'Acceso Privado');
 
-  // Determine avatar URL with priority: Firestore Profile -> Firebase Auth -> Generated Initials
-  // We apply cleaning to the URL to handle Google Redirect links copy-pasted by users
+  // Determine avatar URL
   const rawAvatarUrl = userProfile?.photoUrl || user?.photoURL;
   const avatarUrl = getCleanImageSrc(rawAvatarUrl) || `https://ui-avatars.com/api/?name=${displayName || 'User'}&background=random`;
 
@@ -151,8 +197,8 @@ const Layout = ({ children }: LayoutProps) => {
               onClick={handleLogout}
               className="flex items-center gap-2 text-slate-400 hover:text-white text-sm w-full whitespace-nowrap"
             >
-              {isGuest ? <LogIn size={16} /> : <LogOut size={16} />} 
-              {isGuest ? 'Iniciar Sesión' : 'Cerrar Sesión'}
+              <LogOut size={16} /> 
+              Cerrar Sesión
             </button>
           </div>
         </div>
