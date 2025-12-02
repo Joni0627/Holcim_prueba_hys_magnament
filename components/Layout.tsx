@@ -14,6 +14,22 @@ interface LayoutProps {
   children?: React.ReactNode;
 }
 
+// Helper to extract real image URL from Google Redirects
+const getCleanImageSrc = (url?: string) => {
+  if (!url) return undefined;
+  if (url.includes('google.com/imgres')) {
+    try {
+      const match = url.match(/[?&]imgurl=([^&]+)/);
+      if (match && match[1]) {
+        return decodeURIComponent(match[1]);
+      }
+    } catch (e) {
+      console.warn("Failed to clean image URL", e);
+    }
+  }
+  return url;
+};
+
 const Layout = ({ children }: LayoutProps) => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const navigate = useNavigate();
@@ -58,7 +74,9 @@ const Layout = ({ children }: LayoutProps) => {
     : user?.email;
 
   // Determine avatar URL with priority: Firestore Profile -> Firebase Auth -> Generated Initials
-  const avatarUrl = userProfile?.photoUrl || user?.photoURL || `https://ui-avatars.com/api/?name=${displayName || 'User'}&background=random`;
+  // We apply cleaning to the URL to handle Google Redirect links copy-pasted by users
+  const rawAvatarUrl = userProfile?.photoUrl || user?.photoURL;
+  const avatarUrl = getCleanImageSrc(rawAvatarUrl) || `https://ui-avatars.com/api/?name=${displayName || 'User'}&background=random`;
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden">

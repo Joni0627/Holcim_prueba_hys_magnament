@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Certification, Course, UserTrainingProgress, User } from '../types';
 import { QrCode, Shield, Calendar, UserCheck, ArrowLeft, Loader2 } from 'lucide-react';
@@ -6,6 +5,22 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../services/firebase';
 import { collection, getDocs, query, where, doc, getDoc } from 'firebase/firestore';
+
+// Helper to extract real image URL from Google Redirects
+const getCleanImageSrc = (url?: string) => {
+  if (!url) return undefined;
+  if (url.includes('google.com/imgres')) {
+    try {
+      const match = url.match(/[?&]imgurl=([^&]+)/);
+      if (match && match[1]) {
+        return decodeURIComponent(match[1]);
+      }
+    } catch (e) {
+      console.warn("Failed to clean image URL", e);
+    }
+  }
+  return url;
+};
 
 const Badge = () => {
   const navigate = useNavigate();
@@ -89,6 +104,10 @@ const Badge = () => {
   const qrUrl = `${window.location.origin}${window.location.pathname}#/badge?uid=${targetUserId}`;
   const QR_DATA_IMG = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(qrUrl)}`;
 
+  // Process Avatar URL
+  const rawAvatarUrl = targetUser?.photoUrl;
+  const avatarUrl = getCleanImageSrc(rawAvatarUrl) || `https://ui-avatars.com/api/?name=${targetUser?.firstName || 'U'}+${targetUser?.lastName || 'U'}&background=random`;
+
   // Calculate compliance stats
   const activeCerts = certifications.filter(c => c.status === 'active').length;
   const totalCerts = certifications.length;
@@ -148,7 +167,7 @@ const Badge = () => {
           <div className="bg-brand-800 h-24 relative">
             <div className="absolute -bottom-12 left-1/2 transform -translate-x-1/2">
               <img 
-                src={targetUser?.photoUrl || `https://ui-avatars.com/api/?name=${targetUser?.firstName}+${targetUser?.lastName}&background=random`} 
+                src={avatarUrl}
                 alt="Profile" 
                 className="w-24 h-24 rounded-full border-4 border-white shadow-md bg-white object-cover"
               />
@@ -166,10 +185,13 @@ const Badge = () => {
             <p className="text-slate-500 font-medium">{targetUser?.position || 'Sin puesto asignado'}</p>
             <p className="text-xs text-slate-400 mt-1 font-mono">ID: {targetUser?.id}</p>
 
-            <div className="mt-6 flex justify-center">
+            <div className="mt-6 flex justify-center flex-col items-center gap-2">
               <div className="p-2 bg-white border border-slate-100 rounded-lg shadow-inner">
                 <img src={QR_DATA_IMG} alt="User QR" className="w-48 h-48" />
               </div>
+              <p className="text-[10px] text-slate-400 max-w-[200px] break-all text-center leading-tight opacity-70">
+                 {qrUrl}
+              </p>
             </div>
             <p className="text-xs text-slate-400 mt-2">
                 {isSelf ? 'Presente este código para validación en campo' : 'Código de validación del operario'}

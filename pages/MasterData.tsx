@@ -1,10 +1,25 @@
-
 import React, { useState, useEffect } from 'react';
 import { User, Company, Area, Question, Course, TrainingPlan, Evaluation, JobPosition } from '../types';
 import { Plus, Search, Edit2, Trash2, Users, Building, MapPin, X, Briefcase, Truck, Wrench, ShieldAlert, FileText, CheckSquare, BookOpen, Layers, ArrowLeft, Loader2, Info, Save } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { db } from '../services/firebase';
 import { collection, getDocs, addDoc, updateDoc, doc, deleteDoc, setDoc } from 'firebase/firestore';
+
+// Helper to extract real image URL from Google Redirects (Same as in Layout and Badge)
+const getCleanImageSrc = (url?: string) => {
+  if (!url) return undefined;
+  if (url.includes('google.com/imgres')) {
+    try {
+      const match = url.match(/[?&]imgurl=([^&]+)/);
+      if (match && match[1]) {
+        return decodeURIComponent(match[1]);
+      }
+    } catch (e) {
+      console.warn("Failed to clean image URL", e);
+    }
+  }
+  return url;
+};
 
 // --- INITIAL MOCK DATA EXPORTED FOR SEEDING ---
 export const INITIAL_JOB_POSITIONS_MOCK = [
@@ -205,17 +220,25 @@ const MasterData = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    
+    // Auto Clean Image URL if present in formData
+    const finalFormData = { ...formData };
+    if (finalFormData.photoUrl) {
+        const cleanUrl = getCleanImageSrc(finalFormData.photoUrl);
+        if (cleanUrl) finalFormData.photoUrl = cleanUrl;
+    }
+
     try {
       if (editingId) {
         // Update
         const docRef = doc(db, collectionName, editingId);
-        await updateDoc(docRef, formData);
+        await updateDoc(docRef, finalFormData);
       } else {
         // Create
-        if (formData.id && activeTab === 'users') {
-             await setDoc(doc(db, collectionName, formData.id), formData);
+        if (finalFormData.id && activeTab === 'users') {
+             await setDoc(doc(db, collectionName, finalFormData.id), finalFormData);
         } else {
-             await addDoc(collection(db, collectionName), formData);
+             await addDoc(collection(db, collectionName), finalFormData);
         }
       }
       await fetchData();
@@ -435,6 +458,11 @@ const MasterData = () => {
                            value={formData.photoUrl || ''} 
                            onChange={e => setFormData({...formData, photoUrl: e.target.value})} 
                         />
+                        {formData.photoUrl && formData.photoUrl.includes('google.com/imgres') && (
+                            <div className="mt-1 text-xs text-orange-600 bg-orange-50 p-2 rounded">
+                                Se ha detectado un enlace de redirección de Google. El sistema intentará extraer la imagen real al guardar.
+                            </div>
+                        )}
 
                         <div className="bg-yellow-50 border border-yellow-200 rounded p-3 text-xs text-yellow-800 flex gap-2 items-start mt-2">
                            <Info size={16} className="shrink-0 mt-0.5" />
