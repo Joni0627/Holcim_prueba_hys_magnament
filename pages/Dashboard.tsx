@@ -14,7 +14,7 @@ import {
 import { UserTrainingProgress, TrainingPlan, Course } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../services/firebase';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, query, where } from 'firebase/firestore';
 
 interface ModuleCardProps {
   title: string;
@@ -76,6 +76,7 @@ const Dashboard = () => {
   // Real config from DB
   const [plans, setPlans] = useState<TrainingPlan[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
+  const [myProgress, setMyProgress] = useState<UserTrainingProgress[]>([]);
 
   useEffect(() => {
     const fetchConfig = async () => {
@@ -93,20 +94,29 @@ const Dashboard = () => {
     fetchConfig();
   }, []);
 
+  // Fetch real progress
+  useEffect(() => {
+      const fetchProgress = async () => {
+          if (!userProfile?.id && !user?.uid) return;
+          const uid = userProfile?.id || user?.uid;
+          try {
+             const q = query(collection(db, 'training_progress'), where('userId', '==', uid));
+             const snap = await getDocs(q);
+             setMyProgress(snap.docs.map(d => d.data() as UserTrainingProgress));
+          } catch(e) {
+              console.error("Error loading dashboard progress", e);
+          }
+      };
+      fetchProgress();
+  }, [userProfile, user]);
+
   // Fallback if profile is not loaded yet
   const displayName = userProfile?.firstName || 'Usuario';
+  const CURRENT_USER_POSITION = userProfile?.position || "";
   
-  // Use real data from profile for logic, fallback to mock if needed for specific logic not yet connected
-  const CURRENT_USER_POSITION = userProfile?.position || "OPERARIO DE PRODUCCION - AFR";
-  
-  // Mock Progress for Dashboard (In a real app this would come from an API/Context)
-  const MOCK_PROGRESS_DASHBOARD: UserTrainingProgress[] = [
-    { userId: '27334', courseId: '1', status: 'PENDING', materialViewed: false }
-  ];
-
   // Calculate stats for Training Badge
   const trainingStats = useMemo(() => {
-    if (plans.length === 0) return { pending: 0, expiring: 0 };
+    if (plans.length === 0 || !CURRENT_USER_POSITION) return { pending: 0, expiring: 0 };
     
     const myPlan = plans.find(p => p.positionIds.includes(CURRENT_USER_POSITION));
     if (!myPlan) return { pending: 0, expiring: 0 };
@@ -114,19 +124,34 @@ const Dashboard = () => {
     const myCourses = courses.filter(c => myPlan.courseIds.includes(c.id));
     
     let pending = 0;
-    let expiring = 0; // Mock expiring logic
+    let expiring = 0; 
 
     myCourses.forEach(course => {
-      const progress = MOCK_PROGRESS_DASHBOARD.find(p => p.courseId === course.id);
+      const progress = myProgress.find(p => p.courseId === course.id);
+      
+      // Check Pending
       if (!progress || progress.status !== 'COMPLETED') {
         pending++;
       }
-      // Simulate an expiring course for demo
-      if (course.id === '3') expiring = 1; 
+      
+      // Check Expiring
+      if (progress?.status === 'COMPLETED' && progress.completionDate) {
+          const completion = new Date(progress.completionDate);
+          const expiry = new Date(completion);
+          expiry.setMonth(expiry.getMonth() + course.validityMonths);
+          
+          const warningDate = new Date(expiry);
+          warningDate.setMonth(warningDate.getMonth() - 1); // Warn 1 month before
+
+          const now = new Date();
+          if (now >= warningDate && now < expiry) {
+              expiring++;
+          }
+      }
     });
 
     return { pending, expiring };
-  }, [CURRENT_USER_POSITION, plans, courses]);
+  }, [CURRENT_USER_POSITION, plans, courses, myProgress]);
 
   return (
     <div className="space-y-8">
@@ -218,7 +243,7 @@ const Dashboard = () => {
           <span className="text-sm">Sincronización: Al día</span>
         </div>
         <div className="flex items-center gap-3 text-slate-500">
-           <span className="text-sm">Versión 1.0.9</span>
+           <span className="text-sm">Versión 1.1.0</span>
         </div>
       </div>
     </div>

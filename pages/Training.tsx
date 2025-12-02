@@ -5,12 +5,7 @@ import { Course, Evaluation, UserTrainingProgress, QuizAttempt, TrainingPlan } f
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../services/firebase';
-import { collection, getDocs } from 'firebase/firestore';
-
-// --- MOCK PROGRESS DB (Would be fetched from Firestore in full version) ---
-const MOCK_PROGRESS: UserTrainingProgress[] = [
-  { userId: '27334', courseId: '1', status: 'PENDING', materialViewed: false, attempts: [] }
-];
+import { collection, getDocs, query, where, doc, setDoc } from 'firebase/firestore';
 
 const Quiz = ({ evaluation, onFinish }: { evaluation: Evaluation, onFinish: (passed: boolean, score: number, wrongIds: string[]) => void }) => {
   const [step, setStep] = useState(0);
@@ -86,7 +81,7 @@ const Training = () => {
   const [activeCourse, setActiveCourse] = useState<Course | null>(null);
   const [viewMode, setViewMode] = useState<'details' | 'quiz' | null>(null);
   const [activeGroupKey, setActiveGroupKey] = useState<string | null>(null);
-  const [myProgress, setMyProgress] = useState<UserTrainingProgress[]>(MOCK_PROGRESS);
+  const [myProgress, setMyProgress] = useState<UserTrainingProgress[]>([]);
 
   // Dynamic Data State
   const [isLoadingData, setIsLoadingData] = useState(true);
@@ -95,13 +90,12 @@ const Training = () => {
   const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
 
   const currentUserPosition = userProfile?.position || '';
-  const currentUserId = userProfile?.id || user?.uid || 'unknown';
+  const currentUserId = userProfile?.id || user?.uid;
 
-  // Fetch Data from Firestore
+  // Fetch Configuration Data from Firestore
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchConfig = async () => {
       try {
-        setIsLoadingData(true);
         const [plansSnap, coursesSnap, evalsSnap] = await Promise.all([
           getDocs(collection(db, 'plans')),
           getDocs(collection(db, 'courses')),
@@ -113,12 +107,63 @@ const Training = () => {
         setEvaluations(evalsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Evaluation)));
       } catch (error) {
         console.error("Error fetching training config:", error);
+      }
+    };
+    fetchConfig();
+  }, []);
+
+  // Fetch User Progress from Firestore
+  useEffect(() => {
+    const fetchProgress = async () => {
+      if (!currentUserId) return;
+      setIsLoadingData(true);
+      try {
+        // Fetch personal progress
+        const q = query(collection(db, 'training_progress'), where('userId', '==', currentUserId));
+        const snap = await getDocs(q);
+        const progressData = snap.docs.map(d => d.data() as UserTrainingProgress);
+        setMyProgress(progressData);
+        
+        // If H&S, fetch all pending practicals (could be optimized)
+        if (activeTab === 'hs-validation') {
+            // In a real app with many users, this query should be more specific
+             const qAll = query(collection(db, 'training_progress'), where('status', '==', 'PENDING_PRACTICAL'));
+             // We reuse myProgress state for simplicity in this view or fetch separately? 
+             // To keep it simple, we will fetch pending practicals in a separate effect or combine if needed.
+             // For now, let's keep myProgress strictly for "My Training" tab.
+        }
+      } catch (error) {
+        console.error("Error fetching progress:", error);
       } finally {
         setIsLoadingData(false);
       }
     };
-    fetchData();
-  }, []);
+    fetchProgress();
+  }, [currentUserId, activeTab]);
+
+  // Helper to save progress to Firestore
+  const saveProgress = async (progressItem: UserTrainingProgress) => {
+    if (!progressItem.userId || !progressItem.courseId) return;
+    try {
+        // Use a composite ID for easy updates
+        const docId = `${progressItem.userId}_${progressItem.courseId}`;
+        await setDoc(doc(db, 'training_progress', docId), progressItem);
+        
+        // Update local state
+        setMyProgress(prev => {
+            const idx = prev.findIndex(p => p.courseId === progressItem.courseId);
+            if (idx >= 0) {
+                const newArr = [...prev];
+                newArr[idx] = progressItem;
+                return newArr;
+            }
+            return [...prev, progressItem];
+        });
+    } catch (e) {
+        console.error("Error saving progress", e);
+        alert("Error al guardar el progreso. Verifique su conexión.");
+    }
+  };
 
   // Logic to determine if user can see HS Validation tab
   const isHSPersonnel = 
@@ -179,25 +224,22 @@ const Training = () => {
 
   // --- ACTIONS ---
 
-  const handleVideoComplete = () => {
-    if (!activeCourse) return;
+  const handleVideoComplete = async () => {
+    if (!activeCourse || !currentUserId) return;
     
-    setMyProgress(prev => {
-      const existing = prev.find(p => p.courseId === activeCourse.id);
-      if (existing) {
-        return prev.map(p => p.courseId === activeCourse.id ? { ...p, materialViewed: true } : p);
-      } else {
-        return [...prev, { userId: currentUserId, courseId: activeCourse.id, status: 'PENDING', materialViewed: true, attempts: [] }];
-      }
-    });
-
+    const existing = myProgress.find(p => p.courseId === activeCourse.id);
+    const newItem: UserTrainingProgress = existing 
+        ? { ...existing, materialViewed: true } 
+        : { userId: currentUserId, courseId: activeCourse.id, status: 'PENDING', materialViewed: true, attempts: [] };
+    
+    await saveProgress(newItem);
     alert("Material completado. Se ha registrado su progreso.");
     setActiveCourse(null);
     setViewMode(null);
   };
 
-  const handleFinishQuiz = (passed: boolean, score: number, wrongIds: string[]) => {
-    if (!activeGroupKey) return;
+  const handleFinishQuiz = async (passed: boolean, score: number, wrongIds: string[]) => {
+    if (!activeGroupKey || !currentUserId) return;
 
     const group = groupedCourses.find(g => g.key === activeGroupKey);
     if (!group) return;
@@ -210,16 +252,14 @@ const Training = () => {
     };
 
     if (!passed) {
-        // Record failed attempt
-        setMyProgress(prev => {
-           const courseIds = group.courses.map(c => c.id);
-           return prev.map(p => {
-             if (courseIds.includes(p.courseId)) {
-               return { ...p, attempts: [...(p.attempts || []), attempt] };
-             }
-             return p;
-           });
-        });
+        // Record failed attempt for all courses in group
+        for (const course of group.courses) {
+             const existing = myProgress.find(p => p.courseId === course.id);
+             const newItem: UserTrainingProgress = existing 
+                ? { ...existing, attempts: [...(existing.attempts || []), attempt] }
+                : { userId: currentUserId, courseId: course.id, status: 'PENDING', materialViewed: true, attempts: [attempt] };
+             await saveProgress(newItem);
+        }
 
         alert(`Reprobado (${score.toFixed(0)}%). Debe reintentar. Se ha registrado el intento fallido.`);
         return;
@@ -227,58 +267,68 @@ const Training = () => {
 
     alert(`¡Teórico Aprobado con ${score.toFixed(0)}%!`);
     
-    const completionDate = new Date().toLocaleDateString();
+    const completionDate = new Date().toISOString(); // ISO for sorting
 
-    setMyProgress(prev => {
-      const courseIds = group.courses.map(c => c.id);
-      
-      return prev.map(p => {
-         if (courseIds.includes(p.courseId)) {
-           const course = group.courses.find(gc => gc.id === p.courseId);
-           const status: 'PENDING_PRACTICAL' | 'COMPLETED' = course?.requiresPractical ? 'PENDING_PRACTICAL' : 'COMPLETED';
-           return {
-              ...p,
-              status,
-              score,
-              completionDate: status === 'COMPLETED' ? completionDate : undefined,
-              attempts: [...(p.attempts || []), attempt]
-           };
-         }
-         return p;
-      }).concat(
-        group.courses.filter(c => !prev.some(p => p.courseId === c.id)).map(c => {
-            const status: 'PENDING_PRACTICAL' | 'COMPLETED' = c.requiresPractical ? 'PENDING_PRACTICAL' : 'COMPLETED';
-            return {
+    // Update status for all courses
+    for (const course of group.courses) {
+        const existing = myProgress.find(p => p.courseId === course.id);
+        const status: 'PENDING_PRACTICAL' | 'COMPLETED' = course.requiresPractical ? 'PENDING_PRACTICAL' : 'COMPLETED';
+        
+        const newItem: UserTrainingProgress = existing 
+            ? { 
+                ...existing, 
+                status, 
+                score, 
+                completionDate: status === 'COMPLETED' ? completionDate : undefined,
+                attempts: [...(existing.attempts || []), attempt] 
+              }
+            : {
                 userId: currentUserId,
-                courseId: c.id,
+                courseId: course.id,
                 status,
                 score,
                 completionDate: status === 'COMPLETED' ? completionDate : undefined,
                 materialViewed: true,
                 attempts: [attempt]
             };
-        })
-      );
-    });
+        await saveProgress(newItem);
+    }
 
     setActiveGroupKey(null);
     setViewMode(null);
   };
 
-  const handleValidatePractical = (courseId: string) => {
+  // State for HS validation list (fetched separately)
+  const [pendingPracticals, setPendingPracticals] = useState<UserTrainingProgress[]>([]);
+  
+  useEffect(() => {
+     const loadPending = async () => {
+         if (activeTab === 'hs-validation' && isHSPersonnel) {
+            const q = query(collection(db, 'training_progress'), where('status', '==', 'PENDING_PRACTICAL'));
+            const snap = await getDocs(q);
+            setPendingPracticals(snap.docs.map(d => d.data() as UserTrainingProgress));
+         }
+     };
+     loadPending();
+  }, [activeTab, isHSPersonnel]);
+
+  const handleValidatePractical = async (item: UserTrainingProgress) => {
+    if (!currentUserId) return;
     if (confirm("¿Confirma que el operario ha aprobado la instancia práctica?")) {
-        setMyProgress(prev => prev.map(p => {
-            if (p.courseId === courseId && p.status === 'PENDING_PRACTICAL') {
-                return { 
-                    ...p, 
-                    status: 'COMPLETED', 
-                    completionDate: new Date().toLocaleDateString(),
-                    practicalValidatedBy: currentUserId,
-                    practicalValidatedAt: new Date().toISOString()
-                };
-            }
-            return p;
-        }));
+        const updatedItem: UserTrainingProgress = {
+            ...item,
+            status: 'COMPLETED',
+            completionDate: new Date().toISOString(),
+            practicalValidatedBy: currentUserId,
+            practicalValidatedAt: new Date().toISOString()
+        };
+        // Save to DB
+        const docId = `${item.userId}_${item.courseId}`;
+        await setDoc(doc(db, 'training_progress', docId), updatedItem);
+        
+        // Remove from local pending list
+        setPendingPracticals(prev => prev.filter(p => !(p.userId === item.userId && p.courseId === item.courseId)));
+        alert("Validación registrada correctamente.");
     }
   };
 
@@ -299,7 +349,7 @@ const Training = () => {
       <div className="flex justify-center items-center h-64">
         <div className="flex flex-col items-center gap-4">
           <Loader2 className="animate-spin text-brand-600" size={40} />
-          <p className="text-slate-500 font-medium">Cargando Plan de Capacitación...</p>
+          <p className="text-slate-500 font-medium">Sincronizando Plan de Capacitación...</p>
         </div>
       </div>
     );
@@ -368,9 +418,6 @@ const Training = () => {
     );
   }
 
-  // Calculate pending items for HS view
-  const pendingPracticalItems = myProgress.filter(p => p.status === 'PENDING_PRACTICAL');
-
   // --- MAIN USER VIEW ---
   return (
     <div className="space-y-8">
@@ -419,26 +466,26 @@ const Training = () => {
                 <table className="w-full text-left text-sm text-slate-600">
                     <thead className="bg-slate-50 font-bold text-slate-800 border-b border-slate-200">
                       <tr>
-                          <th className="p-4">Operario</th>
+                          <th className="p-4">Operario ID</th>
                           <th className="p-4">Capacitación</th>
                           <th className="p-4">Examen Teórico</th>
                           <th className="p-4 text-right">Acción</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {pendingPracticalItems.length === 0 && (
+                      {pendingPracticals.length === 0 && (
                           <tr><td colSpan={4} className="p-8 text-center text-slate-400 italic">No hay validaciones prácticas pendientes.</td></tr>
                       )}
-                      {pendingPracticalItems.map((item, idx) => {
+                      {pendingPracticals.map((item, idx) => {
                           const course = courses.find(c => c.id === item.courseId);
                           return (
                             <tr key={idx} className="border-b border-slate-100 hover:bg-slate-50">
-                                <td className="p-4 font-bold text-slate-800">Juan Perez (27334)</td>
-                                <td className="p-4">{course?.title}</td>
+                                <td className="p-4 font-bold text-slate-800">{item.userId}</td>
+                                <td className="p-4">{course?.title || item.courseId}</td>
                                 <td className="p-4 text-green-600 font-bold">Aprobado ({item.score}%)</td>
                                 <td className="p-4 text-right">
                                   <button 
-                                    onClick={() => handleValidatePractical(item.courseId)}
+                                    onClick={() => handleValidatePractical(item)}
                                     className="bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-green-700 shadow-sm flex items-center gap-1 ml-auto"
                                   >
                                       <UserCheck size={14} /> Validar Práctica
