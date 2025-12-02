@@ -123,15 +123,6 @@ const Training = () => {
         const snap = await getDocs(q);
         const progressData = snap.docs.map(d => d.data() as UserTrainingProgress);
         setMyProgress(progressData);
-        
-        // If H&S, fetch all pending practicals (could be optimized)
-        if (activeTab === 'hs-validation') {
-            // In a real app with many users, this query should be more specific
-             const qAll = query(collection(db, 'training_progress'), where('status', '==', 'PENDING_PRACTICAL'));
-             // We reuse myProgress state for simplicity in this view or fetch separately? 
-             // To keep it simple, we will fetch pending practicals in a separate effect or combine if needed.
-             // For now, let's keep myProgress strictly for "My Training" tab.
-        }
       } catch (error) {
         console.error("Error fetching progress:", error);
       } finally {
@@ -147,7 +138,12 @@ const Training = () => {
     try {
         // Use a composite ID for easy updates
         const docId = `${progressItem.userId}_${progressItem.courseId}`;
-        await setDoc(doc(db, 'training_progress', docId), progressItem);
+        
+        // CRITICAL FIX: Sanitize the object to remove any 'undefined' values.
+        // Firestore throws an error if any field is undefined.
+        const safeData = JSON.parse(JSON.stringify(progressItem));
+
+        await setDoc(doc(db, 'training_progress', docId), safeData);
         
         // Update local state
         setMyProgress(prev => {
@@ -322,9 +318,8 @@ const Training = () => {
             practicalValidatedBy: currentUserId,
             practicalValidatedAt: new Date().toISOString()
         };
-        // Save to DB
-        const docId = `${item.userId}_${item.courseId}`;
-        await setDoc(doc(db, 'training_progress', docId), updatedItem);
+        // Save to DB via helper to sanitize
+        await saveProgress(updatedItem);
         
         // Remove from local pending list
         setPendingPracticals(prev => prev.filter(p => !(p.userId === item.userId && p.courseId === item.courseId)));

@@ -140,12 +140,12 @@ const Layout = ({ children }: LayoutProps) => {
         ${sidebarOpen ? 'w-64 translate-x-0' : '-translate-x-full lg:translate-x-0 lg:w-20'}
       `}>
           {/* Header */}
-          <div className={`flex items-center ${sidebarOpen ? 'justify-between px-4' : 'justify-center'} h-16 border-b border-brand-700 shrink-0 transition-all duration-300`}>
+          <div className={`flex items-center ${sidebarOpen ? 'justify-between px-4' : 'justify-center'} h-16 border-b border-brand-700 shrink-0 transition-all duration-300 overflow-hidden`}>
             <div className="flex items-center gap-2 overflow-hidden">
               <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center shrink-0 text-brand-800 font-bold">
                 H&S
               </div>
-              <span className={`font-bold text-xl tracking-tight whitespace-nowrap transition-opacity duration-200 ${sidebarOpen ? 'opacity-100' : 'opacity-0 hidden'}`}>
+              <span className={`font-bold text-xl tracking-tight whitespace-nowrap transition-all duration-300 origin-left ${sidebarOpen ? 'opacity-100 scale-100 ml-0' : 'opacity-0 scale-90 w-0 ml-0 overflow-hidden'}`}>
                 Management
               </span>
             </div>
@@ -172,13 +172,14 @@ const Layout = ({ children }: LayoutProps) => {
               >
                 <span className="shrink-0">{item.icon}</span>
                 
-                <span className={`font-medium transition-all duration-200 ${sidebarOpen ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-4 absolute left-12 pointer-events-none hidden'}`}>
+                {/* Smooth collapse for text: adjust opacity and width/overflow to prevent abrupt jumps */}
+                <span className={`font-medium transition-all duration-300 ${sidebarOpen ? 'opacity-100 w-auto translate-x-0' : 'opacity-0 w-0 -translate-x-4 overflow-hidden'}`}>
                   {item.label}
                 </span>
 
                 {/* Tooltip for collapsed mode */}
                 {!sidebarOpen && (
-                  <div className="absolute left-14 bg-slate-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 pointer-events-none shadow-md">
+                  <div className="absolute left-16 bg-slate-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 pointer-events-none shadow-md">
                     {item.label}
                   </div>
                 )}
@@ -195,7 +196,7 @@ const Layout = ({ children }: LayoutProps) => {
                 referrerPolicy="no-referrer"
                 className="w-10 h-10 rounded-full border-2 border-slate-400 shrink-0 object-cover bg-slate-100"
               />
-              <div className={`overflow-hidden transition-all duration-200 ${sidebarOpen ? 'opacity-100 w-auto' : 'opacity-0 w-0 hidden'}`}>
+              <div className={`overflow-hidden transition-all duration-300 ${sidebarOpen ? 'opacity-100 w-auto' : 'opacity-0 w-0'}`}>
                 <p className="text-sm font-semibold truncate">{displayName}</p>
                 <p className="text-xs text-slate-400 truncate" title={displayRole || ''}>{displayRole}</p>
               </div>
@@ -207,7 +208,7 @@ const Layout = ({ children }: LayoutProps) => {
               className={`flex items-center gap-2 text-slate-400 hover:text-white text-sm w-full whitespace-nowrap transition-all ${!sidebarOpen ? 'justify-center' : ''}`}
             >
               <LogOut size={20} /> 
-              <span className={`${sidebarOpen ? 'block' : 'hidden'}`}>Cerrar Sesión</span>
+              <span className={`transition-all duration-300 ${sidebarOpen ? 'opacity-100 w-auto' : 'opacity-0 w-0 overflow-hidden'}`}>Cerrar Sesión</span>
             </button>
           </div>
       </aside>
@@ -225,7 +226,6 @@ const Layout = ({ children }: LayoutProps) => {
               {sidebarOpen ? <ChevronLeft size={24} className="hidden lg:block" /> : <Menu size={24} className="hidden lg:block" />}
             </button>
             <h1 className="text-lg font-semibold text-brand-800 lg:hidden">H&S Management</h1>
-            {/* Breadcrumb or Title for Desktop could go here */}
           </div>
 
           <div className="flex items-center gap-4">
