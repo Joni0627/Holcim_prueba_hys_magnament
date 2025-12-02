@@ -3,7 +3,8 @@ import { Certification, Course, UserTrainingProgress, User } from '../types';
 import { QrCode, Shield, Calendar, UserCheck, ArrowLeft, Loader2, ShieldAlert, Copy, Info, CheckCircle } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { db } from '../services/firebase';
+import { db, auth } from '../services/firebase';
+import { signInAnonymously } from 'firebase/auth';
 import { collection, getDocs, query, where, doc, getDoc } from 'firebase/firestore';
 
 // Helper to extract real image URL from Google Redirects
@@ -61,20 +62,42 @@ const Badge = () => {
     }
   }, [targetUserId]);
 
+  // Attempt Anonymous Login if Public View and Not Logged In
+  useEffect(() => {
+    const tryAnonymousAuth = async () => {
+        if (isPublicView && !user && !authLoading) {
+            try {
+                // This attempts to log in as a guest to satisfy DB rules like "allow read: if request.auth != null"
+                await signInAnonymously(auth);
+            } catch (e: any) {
+                console.warn("Anonymous auth failed", e);
+                // We don't block here, we proceed to try fetching. 
+                // It might fail later with permission-denied if rules are strict.
+            }
+        }
+    };
+    tryAnonymousAuth();
+  }, [isPublicView, user, authLoading]);
+
   // Redirect if no target ID and auth is done loading (guest user visiting /badge without param)
   useEffect(() => {
-    if (!authLoading && !targetUserId) {
+    // Only redirect if NOT loading, NO target ID, and user is NOT anonymous (anonymous implies they are trying to view public data but URL is wrong)
+    if (!authLoading && !targetUserId && (!user || !user.isAnonymous)) {
         navigate('/login');
     }
-  }, [authLoading, targetUserId, navigate]);
+  }, [authLoading, targetUserId, navigate, user]);
 
   // Fetch Data for the Badge
   useEffect(() => {
     const fetchBadgeData = async () => {
+      // Don't fetch if no target ID
       if (!targetUserId) {
           setIsLoading(false);
           return;
       }
+      
+      // Don't fetch if auth is strictly loading (unless we have a user already)
+      if (authLoading && !user) return;
 
       setIsLoading(true);
       setError(null);
@@ -132,7 +155,9 @@ const Badge = () => {
       } catch (error: any) {
          console.error("Error loading badge:", error);
          if (error.code === 'permission-denied') {
-             setError("Acceso Restringido. El perfil de este operario no es público o su sesión ha expirado.");
+             setError("PERMISO DENEGADO. La base de datos requiere autenticación. Por favor, habilite el acceso anónimo en Firebase Console o ajuste las reglas de seguridad.");
+         } else if (error.code === 'unavailable') {
+             setError("Sin conexión. Verifique su acceso a internet.");
          } else {
              setError("Error técnico al cargar la información del operario.");
          }
@@ -142,7 +167,7 @@ const Badge = () => {
     };
 
     fetchBadgeData();
-  }, [targetUserId, isSelf, userProfile, paramUid]);
+  }, [targetUserId, isSelf, userProfile, paramUid, user, authLoading]);
 
   const QR_DATA_IMG = qrUrl ? `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qrUrl)}` : '';
 
@@ -198,16 +223,16 @@ const Badge = () => {
                <ShieldAlert className="text-red-500" size={48} />
             </div>
             <h3 className="text-2xl font-bold text-slate-800 mb-2">Consulta No Disponible</h3>
-            <p className="text-slate-500 mb-8 max-w-sm">{error}</p>
+            <p className="text-slate-500 mb-8 max-w-sm text-sm">{error}</p>
             
             {!user && (
                 <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 text-sm text-slate-500 max-w-sm">
-                   <p className="mb-2"><strong>Nota para Supervisores:</strong></p>
-                   <p>Si la base de datos es privada, debe iniciar sesión en el sistema para poder visualizar los datos del operario.</p>
+                   <p className="mb-2"><strong>Nota para Desarrolladores:</strong></p>
+                   <p className="text-xs">Para permitir acceso público, habilite <em>Anonymous Auth</em> en Firebase Authentication o actualice las <em>Firestore Rules</em> para permitir lecturas públicas en 'users', 'training_progress' y 'courses'.</p>
                 </div>
             )}
             
-            {user && (
+            {user && !user.isAnonymous && (
                  <button onClick={() => navigate('/')} className="mt-6 text-brand-600 font-medium hover:underline">
                     Volver al Inicio
                 </button>

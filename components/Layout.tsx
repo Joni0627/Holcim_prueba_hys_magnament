@@ -81,9 +81,8 @@ const Layout = ({ children }: LayoutProps) => {
   }
 
   // --- GUEST / PUBLIC LAYOUT ---
-  // If no user is logged in, we show a simplified layout (Certificate View)
-  // This is used for QR Code scans by external personnel
-  if (!user) {
+  // If no user is logged in OR user is Anonymous (QR Scan guest), show simplified layout
+  if (!user || user.isAnonymous) {
     return (
       <div className="min-h-screen bg-slate-100 flex flex-col font-sans text-slate-900">
         {/* Simple Public Header */}

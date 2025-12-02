@@ -44,7 +44,8 @@ const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
   
   if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="w-8 h-8 border-4 border-brand-800 border-t-transparent rounded-full animate-spin"></div></div>;
   
-  if (!user) return <Navigate to="/login" />;
+  // Block access if no user OR if user is anonymous (guest)
+  if (!user || user.isAnonymous) return <Navigate to="/login" />;
   
   return <>{children}</>;
 };
