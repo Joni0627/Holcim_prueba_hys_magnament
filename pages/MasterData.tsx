@@ -1,12 +1,12 @@
 
 import React, { useState, useEffect } from 'react';
-import { User, Company, Area, Question, Course, TrainingPlan, Evaluation } from '../types';
-import { Plus, Search, Edit2, Trash2, Users, Building, MapPin, X, Briefcase, Truck, Wrench, ShieldAlert, FileText, CheckSquare, BookOpen, Layers, ArrowLeft, Database, Loader2, Info } from 'lucide-react';
+import { User, Company, Area, Question, Course, TrainingPlan, Evaluation, JobPosition } from '../types';
+import { Plus, Search, Edit2, Trash2, Users, Building, MapPin, X, Briefcase, Truck, Wrench, ShieldAlert, FileText, CheckSquare, BookOpen, Layers, ArrowLeft, Loader2, Info, Save } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { db } from '../services/firebase';
 import { collection, getDocs, addDoc, updateDoc, doc, deleteDoc, setDoc } from 'firebase/firestore';
 
-// --- INITIAL MOCK DATA EXPORTED FOR SEEDING (Keep code but hide button) ---
+// --- INITIAL MOCK DATA EXPORTED FOR SEEDING ---
 export const INITIAL_JOB_POSITIONS_MOCK = [
   "OPERARIO DE PRODUCCION - AFR",
   "OPERARIO DE PRODUCCION - MOLINERO CRUDO - CEMENTO",
@@ -124,8 +124,6 @@ const MasterData = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [isSeeding, setIsSeeding] = useState(false);
 
   // Dynamic Data State
   const [data, setData] = useState<any[]>([]);
@@ -133,34 +131,43 @@ const MasterData = () => {
   // Lookup Data State
   const [companiesLookup, setCompaniesLookup] = useState<Company[]>([]);
   const [areasLookup, setAreasLookup] = useState<Area[]>([]);
+  
+  // Academia Lookups
+  const [allPositions, setAllPositions] = useState<JobPosition[]>([]);
+  const [allCourses, setAllCourses] = useState<Course[]>([]);
+  const [allEvaluations, setAllEvaluations] = useState<Evaluation[]>([]);
 
   const currentGroup = TAB_GROUPS.find(g => g.tabs.some(t => t.id === activeTab)) || TAB_GROUPS[0];
   const currentTabDef = currentGroup.tabs.find(t => t.id === activeTab);
   const collectionName = currentTabDef?.collection || 'users';
 
-  // --- FETCH LOOKUPS (Empresas y Areas) ---
+  // --- FETCH LOOKUPS (Dependencies) ---
   const fetchLookups = async () => {
     try {
         const compSnap = await getDocs(collection(db, 'companies'));
         setCompaniesLookup(compSnap.docs.map(d => ({id: d.id, ...d.data()} as Company)));
+        
         const areaSnap = await getDocs(collection(db, 'areas'));
         setAreasLookup(areaSnap.docs.map(d => ({id: d.id, ...d.data()} as Area)));
+
+        // Academia Lookups
+        const posSnap = await getDocs(collection(db, 'positions'));
+        setAllPositions(posSnap.docs.map(d => ({id: d.id, ...d.data()} as JobPosition)));
+
+        const courseSnap = await getDocs(collection(db, 'courses'));
+        setAllCourses(courseSnap.docs.map(d => ({id: d.id, ...d.data()} as Course)));
+
+        const evalSnap = await getDocs(collection(db, 'evaluations'));
+        setAllEvaluations(evalSnap.docs.map(d => ({id: d.id, ...d.data()} as Evaluation)));
+
     } catch(e) {
         console.error("Error loading lookups", e);
     }
   };
 
-  // Ensure lookups are refreshed when switching to Users tab to catch any newly created Company/Area
-  useEffect(() => {
-    if (activeTab === 'users') {
-        fetchLookups();
-    }
-  }, [activeTab]);
-
-  // Initial fetch on mount
   useEffect(() => {
     fetchLookups();
-  }, []);
+  }, [activeTab]);
 
   // --- FETCH DATA FROM FIRESTORE ---
   const fetchData = async () => {
@@ -181,52 +188,15 @@ const MasterData = () => {
     fetchData();
   }, [activeTab]);
 
-  // --- SEED DATABASE UTILITY (HIDDEN IN UI) ---
-  const seedDatabase = async () => {
-    if (!confirm("⚠️ ¿Desea inicializar la base de datos con los datos de prueba? Esto cargará usuarios, planes y cursos iniciales.")) return;
-    
-    setIsSeeding(true);
-    try {
-       for (const posName of INITIAL_JOB_POSITIONS_MOCK) {
-          await addDoc(collection(db, 'positions'), { name: posName });
-       }
-       for (const ev of INITIAL_EVALUATIONS_MOCK) {
-          await setDoc(doc(db, 'evaluations', ev.id), ev);
-       }
-       for (const co of INITIAL_COURSES_MOCK) {
-          await setDoc(doc(db, 'courses', co.id), co);
-       }
-       for (const pl of INITIAL_PLANS_MOCK) {
-          await setDoc(doc(db, 'plans', pl.id), pl);
-       }
-       const initialUser: User = { 
-           id: '20304050', firstName: 'Carlos', lastName: 'Mendez', emails: ['carlos@empresa.com'], 
-           role: 'Supervisor', position: 'SUPERVISOR DE MANTENIMIENTO', profile: 'Usuario', 
-           companyId: '1', areaId: '2' 
-       };
-       await setDoc(doc(db, 'users', initialUser.id), initialUser);
-
-       alert("✅ Base de datos inicializada correctamente!");
-       fetchData();
-    } catch (e: any) {
-       console.error(e);
-       alert(`Error al inicializar datos: ${e.message}`);
-    } finally {
-       setIsSeeding(false);
-    }
-  };
-
   // --- FORM STATES ---
   const [formData, setFormData] = useState<any>({});
   
   // Question Builder State (For Evaluations)
-  const [tempQuestion, setTempQuestion] = useState<Partial<Question>>({ options: ['', ''], correctIndex: 0 });
-  const [editingQuestionIndex, setEditingQuestionIndex] = useState<number | null>(null);
+  const [tempQuestion, setTempQuestion] = useState<Partial<Question>>({ text: '', options: ['', '', ''], correctIndex: 0 });
 
   const resetForm = () => {
     setFormData({});
-    setTempQuestion({ text: '', options: ['', ''], correctIndex: 0 });
-    setEditingQuestionIndex(null);
+    setTempQuestion({ text: '', options: ['', '', ''], correctIndex: 0 });
     setEditingId(null);
     setIsModalOpen(false);
   };
@@ -278,7 +248,7 @@ const MasterData = () => {
     setIsModalOpen(true);
   };
 
-  // --- SPECIFIC FORM HELPERS ---
+  // --- HELPER FOR MULTI SELECT ---
   const toggleSelection = (field: string, id: string) => {
     setFormData((prev: any) => {
       const current = prev[field] || [];
@@ -286,21 +256,33 @@ const MasterData = () => {
     });
   };
 
-  // --- QUESTION MANAGEMENT ---
-  const saveQuestion = () => {
-    if (!tempQuestion.text) return;
-    const q: Question = { ...tempQuestion as Question, id: tempQuestion.id || Date.now().toString() };
-    let updatedQuestions = [...(formData.questions || [])];
-    if (editingQuestionIndex !== null) updatedQuestions[editingQuestionIndex] = q;
-    else updatedQuestions.push(q);
-    setFormData({ ...formData, questions: updatedQuestions });
-    setTempQuestion({ text: '', options: ['', ''], correctIndex: 0 });
-    setEditingQuestionIndex(null);
+  // --- QUESTION MANAGEMENT FOR EVALUATIONS ---
+  const handleOptionChange = (index: number, value: string) => {
+    const newOptions = [...(tempQuestion.options || [])];
+    newOptions[index] = value;
+    setTempQuestion({ ...tempQuestion, options: newOptions });
+  };
+
+  const addQuestion = () => {
+    if (!tempQuestion.text || tempQuestion.options?.some(o => !o)) {
+      alert("Complete la pregunta y todas las opciones");
+      return;
+    }
+    const newQuestion: Question = {
+      id: `q-${Date.now()}`,
+      text: tempQuestion.text,
+      options: tempQuestion.options || [],
+      correctIndex: tempQuestion.correctIndex || 0
+    };
+    
+    setFormData({ ...formData, questions: [...(formData.questions || []), newQuestion] });
+    setTempQuestion({ text: '', options: ['', '', ''], correctIndex: 0 });
   };
 
   const deleteQuestion = (idx: number) => {
-    const updatedQuestions = formData.questions.filter((_:any, i:number) => i !== idx);
-    setFormData({ ...formData, questions: updatedQuestions });
+    const updated = [...(formData.questions || [])];
+    updated.splice(idx, 1);
+    setFormData({ ...formData, questions: updated });
   };
 
   const handleParentTabClick = (group: typeof TAB_GROUPS[0]) => setActiveTab(group.tabs[0].id);
@@ -317,18 +299,6 @@ const MasterData = () => {
             <p className="text-slate-500">Gestión de base de datos ({data.length} registros)</p>
           </div>
         </div>
-        
-        {/* Seed button hidden as requested */}
-        {/* 
-        <button 
-           onClick={seedDatabase} 
-           disabled={isSeeding}
-           className="bg-orange-100 text-orange-700 px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-orange-200 border border-orange-200"
-        >
-           {isSeeding ? <Loader2 className="animate-spin" size={16} /> : <Database size={16} />}
-           Inicializar BD (Seed)
-        </button> 
-        */}
       </div>
 
       <div className="flex border-b border-slate-200 gap-1 overflow-x-auto no-scrollbar">
@@ -413,6 +383,7 @@ const MasterData = () => {
             <div className="p-6">
                <form onSubmit={handleSubmit} className="space-y-4">
                   
+                  {/* --- USERS FORM --- */}
                   {activeTab === 'users' && (
                      <>
                         <input required placeholder="DNI / Legajo" className="w-full p-2 border rounded text-slate-900 bg-white" value={formData.id || ''} onChange={e => setFormData({...formData, id: e.target.value})} disabled={!!editingId} />
@@ -441,7 +412,9 @@ const MasterData = () => {
 
                         <select required className="w-full p-2 border rounded text-slate-900 bg-white" value={formData.position || ''} onChange={e => setFormData({...formData, position: e.target.value})}>
                             <option value="">Seleccione Puesto...</option>
-                            {INITIAL_JOB_POSITIONS_MOCK.map(p => <option key={p} value={p}>{p}</option>)}
+                            {allPositions.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                            {/* Fallback to static list if empty */}
+                            {allPositions.length === 0 && INITIAL_JOB_POSITIONS_MOCK.map(p => <option key={p} value={p}>{p}</option>)}
                         </select>
                         
                         <div className="grid grid-cols-2 gap-4">
@@ -467,12 +440,13 @@ const MasterData = () => {
                            <Info size={16} className="shrink-0 mt-0.5" />
                            <p>
                              <strong>Importante:</strong> Al guardar, recuerde crear también la cuenta en 
-                             <em> Firebase Authentication</em> con el mismo email para que el usuario pueda ingresar.
+                             <em> Firebase Authentication</em> con el mismo email.
                            </p>
                         </div>
                      </>
                   )}
 
+                  {/* --- GENERIC NAME FIELD --- */}
                   {['companies', 'areas', 'positions', 'standards', 'risks'].includes(activeTab) && (
                       <input required placeholder="Nombre" className="w-full p-2 border rounded text-slate-900 bg-white" value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} />
                   )}
@@ -493,42 +467,128 @@ const MasterData = () => {
                      </>
                   )}
 
+                  {/* --- COURSES FORM --- */}
                   {activeTab === 'courses' && (
                      <>
                         <input required placeholder="Título" className="w-full p-2 border rounded text-slate-900 bg-white" value={formData.title || ''} onChange={e => setFormData({...formData, title: e.target.value})} />
                         <textarea placeholder="Descripción" className="w-full p-2 border rounded text-slate-900 bg-white" value={formData.description || ''} onChange={e => setFormData({...formData, description: e.target.value})} />
-                        <input placeholder="URL Contenido (Video/PDF)" className="w-full p-2 border rounded text-slate-900 bg-white" value={formData.contentUrl || ''} onChange={e => setFormData({...formData, contentUrl: e.target.value})} />
+                        <div className="grid grid-cols-2 gap-4">
+                             <select className="w-full p-2 border rounded text-slate-900 bg-white" value={formData.contentType || 'VIDEO'} onChange={e => setFormData({...formData, contentType: e.target.value})}>
+                                <option value="VIDEO">Video (YouTube/URL)</option>
+                                <option value="PDF">Documento PDF</option>
+                             </select>
+                             <input placeholder="URL Contenido" className="w-full p-2 border rounded text-slate-900 bg-white" value={formData.contentUrl || ''} onChange={e => setFormData({...formData, contentUrl: e.target.value})} />
+                        </div>
                         <div className="grid grid-cols-2 gap-4">
                            <input type="number" placeholder="Vigencia (Meses)" className="w-full p-2 border rounded text-slate-900 bg-white" value={formData.validityMonths || ''} onChange={e => setFormData({...formData, validityMonths: Number(e.target.value)})} />
+                           <select className="w-full p-2 border rounded text-slate-900 bg-white" value={formData.evaluationId || ''} onChange={e => setFormData({...formData, evaluationId: e.target.value})}>
+                                <option value="">Sin Evaluación (Solo Contenido)</option>
+                                {allEvaluations.map(ev => <option key={ev.id} value={ev.id}>{ev.name}</option>)}
+                           </select>
                         </div>
-                        <div className="flex gap-4">
-                            <label className="flex items-center gap-2 text-sm">
-                                <input type="checkbox" checked={formData.isOneTime || false} onChange={e => setFormData({...formData, isOneTime: e.target.checked})} />
+                        <div className="flex gap-4 p-2 bg-slate-50 rounded border border-slate-100">
+                            <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+                                <input type="checkbox" checked={formData.isOneTime || false} onChange={e => setFormData({...formData, isOneTime: e.target.checked})} className="w-4 h-4 text-brand-600 rounded" />
                                 Por única vez
                             </label>
-                            <label className="flex items-center gap-2 text-sm">
-                                <input type="checkbox" checked={formData.requiresPractical || false} onChange={e => setFormData({...formData, requiresPractical: e.target.checked})} />
+                            <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+                                <input type="checkbox" checked={formData.requiresPractical || false} onChange={e => setFormData({...formData, requiresPractical: e.target.checked})} className="w-4 h-4 text-brand-600 rounded" />
                                 Requiere Práctico
                             </label>
                         </div>
                      </>
                   )}
 
+                  {/* --- PLANS FORM --- */}
                   {activeTab === 'plans' && (
                      <>
-                        <input required placeholder="Nombre del Plan" className="w-full p-2 border rounded text-slate-900 bg-white" value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} />
+                        <input required placeholder="Nombre del Plan" className="w-full p-2 border rounded text-slate-900 bg-white font-bold" value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} />
+                        
+                        <div className="border border-slate-200 rounded-lg p-3">
+                           <h4 className="text-xs font-bold text-slate-500 uppercase mb-2">Puestos Asociados</h4>
+                           <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
+                              {allPositions.length === 0 && <p className="text-xs text-slate-400">No hay puestos cargados.</p>}
+                              {allPositions.map(pos => (
+                                 <button type="button" key={pos.id} onClick={() => toggleSelection('positionIds', pos.name)}
+                                    className={`text-xs px-2 py-1 rounded border transition-colors ${formData.positionIds?.includes(pos.name) ? 'bg-brand-100 text-brand-800 border-brand-300 font-bold' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'}`}>
+                                    {pos.name}
+                                 </button>
+                              ))}
+                           </div>
+                        </div>
+
+                        <div className="border border-slate-200 rounded-lg p-3">
+                           <h4 className="text-xs font-bold text-slate-500 uppercase mb-2">Cursos del Plan</h4>
+                           <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
+                              {allCourses.length === 0 && <p className="text-xs text-slate-400">No hay cursos cargados.</p>}
+                              {allCourses.map(course => (
+                                 <button type="button" key={course.id} onClick={() => toggleSelection('courseIds', course.id)}
+                                    className={`text-xs px-2 py-1 rounded border transition-colors ${formData.courseIds?.includes(course.id) ? 'bg-purple-100 text-purple-800 border-purple-300 font-bold' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'}`}>
+                                    {course.title}
+                                 </button>
+                              ))}
+                           </div>
+                        </div>
                      </>
                   )}
 
+                  {/* --- EVALUATIONS FORM --- */}
                   {activeTab === 'evaluations' && (
-                      <>
-                        <input required placeholder="Nombre Examen" className="w-full p-2 border rounded text-slate-900 bg-white" value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} />
-                        <input type="number" placeholder="Puntaje Aprobación" className="w-full p-2 border rounded text-slate-900 bg-white" value={formData.passingScore || ''} onChange={e => setFormData({...formData, passingScore: Number(e.target.value)})} />
-                      </>
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-3 gap-4">
+                            <div className="col-span-2">
+                                <label className="text-xs font-bold text-slate-500">Nombre Examen</label>
+                                <input required placeholder="Ej. Examen de Altura" className="w-full p-2 border rounded text-slate-900 bg-white" value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} />
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold text-slate-500">Score Aprobación (%)</label>
+                                <input type="number" placeholder="80" className="w-full p-2 border rounded text-slate-900 bg-white" value={formData.passingScore || ''} onChange={e => setFormData({...formData, passingScore: Number(e.target.value)})} />
+                            </div>
+                        </div>
+
+                        <div className="border-t border-slate-100 pt-4">
+                            <h4 className="font-bold text-slate-700 mb-3 flex items-center gap-2"><CheckSquare size={16}/> Preguntas ({formData.questions?.length || 0})</h4>
+                            
+                            {/* Existing Questions List */}
+                            <div className="space-y-2 mb-4 max-h-48 overflow-y-auto">
+                                {formData.questions?.map((q: Question, idx: number) => (
+                                    <div key={idx} className="bg-slate-50 p-2 rounded border border-slate-200 flex justify-between items-center text-sm">
+                                        <div>
+                                            <span className="font-bold text-slate-700 block">{idx + 1}. {q.text}</span>
+                                            <span className="text-xs text-green-600">Respuesta: {q.options[q.correctIndex]}</span>
+                                        </div>
+                                        <button type="button" onClick={() => deleteQuestion(idx)} className="text-red-400 hover:text-red-600 p-1"><Trash2 size={14}/></button>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* Question Builder */}
+                            <div className="bg-blue-50 p-3 rounded-lg border border-blue-100">
+                                <h5 className="text-xs font-bold text-blue-800 uppercase mb-2">Nueva Pregunta</h5>
+                                <input className="w-full p-2 border rounded text-slate-900 bg-white mb-2 text-sm" placeholder="Texto de la pregunta..." value={tempQuestion.text} onChange={e => setTempQuestion({...tempQuestion, text: e.target.value})} />
+                                <div className="space-y-1 mb-2">
+                                    {[0, 1, 2].map((i) => (
+                                        <input key={i} className="w-full p-1.5 border rounded text-slate-700 bg-white text-xs" placeholder={`Opción ${i+1}`} value={tempQuestion.options?.[i] || ''} onChange={e => handleOptionChange(i, e.target.value)} />
+                                    ))}
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs font-bold text-slate-500">Correcta:</span>
+                                        <select className="p-1 border rounded text-sm bg-white" value={tempQuestion.correctIndex} onChange={e => setTempQuestion({...tempQuestion, correctIndex: Number(e.target.value)})}>
+                                            <option value={0}>Opción 1</option>
+                                            <option value={1}>Opción 2</option>
+                                            <option value={2}>Opción 3</option>
+                                        </select>
+                                    </div>
+                                    <button type="button" onClick={addQuestion} className="bg-blue-600 text-white px-3 py-1 rounded text-xs font-bold hover:bg-blue-700">Agregar</button>
+                                </div>
+                            </div>
+                        </div>
+                      </div>
                   )}
 
-                  <button type="submit" className="w-full bg-brand-800 text-white p-2 rounded flex items-center justify-center gap-2">
-                      {isLoading ? <Loader2 className="animate-spin" size={16}/> : 'Guardar'}
+                  <button type="submit" className="w-full bg-brand-800 hover:bg-brand-900 text-white p-3 rounded-lg font-bold flex items-center justify-center gap-2 shadow-lg mt-4">
+                      {isLoading ? <Loader2 className="animate-spin" size={18}/> : <><Save size={18}/> Guardar Registro</>}
                   </button>
                </form>
             </div>
