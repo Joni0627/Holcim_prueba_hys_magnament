@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Certification, Course, UserTrainingProgress, User } from '../types';
-import { QrCode, Shield, Calendar, UserCheck, ArrowLeft, Loader2, ShieldAlert, ExternalLink } from 'lucide-react';
+import { QrCode, Shield, Calendar, UserCheck, ArrowLeft, Loader2, ShieldAlert, ExternalLink, Info, Copy } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../services/firebase';
@@ -38,10 +38,27 @@ const Badge = () => {
   const [mode, setMode] = useState<'view' | 'scan'>('view');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [qrUrl, setQrUrl] = useState('');
   
   // Data State
   const [targetUser, setTargetUser] = useState<User | null>(null);
   const [certifications, setCertifications] = useState<Certification[]>([]);
+
+  // Calculate Robust QR URL
+  useEffect(() => {
+    if (targetUserId) {
+        // Robust way to get the base URL regardless of environment
+        // We use href.split('#')[0] to get the root url without the hash fragment
+        const currentHref = window.location.href;
+        const baseUrl = currentHref.split('#')[0];
+        
+        // Remove trailing slash if present to avoid double slashes, then append hash route
+        const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+        const fullUrl = `${cleanBaseUrl}/#/badge?uid=${targetUserId}`;
+        
+        setQrUrl(fullUrl);
+    }
+  }, [targetUserId]);
 
   // Redirect if no target ID and auth is done loading (guest user visiting /badge without param)
   useEffect(() => {
@@ -114,7 +131,7 @@ const Badge = () => {
       } catch (error: any) {
          console.error("Error loading badge:", error);
          if (error.code === 'permission-denied') {
-             setError("No tiene permisos para visualizar esta credencial. Inicie sesión o contacte al administrador.");
+             setError("Acceso Restringido. Es posible que las reglas de seguridad de la base de datos no permitan el acceso público. Contacte al administrador.");
          } else {
              setError("Error al cargar la información del operario.");
          }
@@ -126,13 +143,7 @@ const Badge = () => {
     fetchBadgeData();
   }, [targetUserId, isSelf, userProfile, paramUid]);
 
-  // Generate a QR that links to this page with the user ID
-  // Fixed: Use window.location.href to ensure correct base URL in all environments, removing any potential duplicate protocols
-  const currentUrl = window.location.href;
-  const baseUrl = currentUrl.split('#')[0]; // Remove hash and params
-  const qrUrl = `${baseUrl}#/badge?uid=${targetUserId}`;
-  
-  const QR_DATA_IMG = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qrUrl)}`;
+  const QR_DATA_IMG = qrUrl ? `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qrUrl)}` : '';
 
   // Process Avatar URL
   const rawAvatarUrl = targetUser?.photoUrl;
@@ -142,6 +153,11 @@ const Badge = () => {
   const activeCerts = certifications.filter(c => c.status === 'active').length;
   const totalCerts = certifications.length;
   const compliance = totalCerts > 0 ? Math.round((activeCerts / totalCerts) * 100) : 0;
+
+  const handleCopyUrl = () => {
+    navigator.clipboard.writeText(qrUrl);
+    alert("Enlace copiado al portapapeles.");
+  };
 
   if (mode === 'scan') {
     return (
@@ -178,7 +194,7 @@ const Badge = () => {
       return (
         <div className="flex flex-col items-center justify-center h-64 text-center px-4 animate-fade-in">
             <ShieldAlert className="text-red-500 mb-4" size={48} />
-            <h3 className="text-lg font-bold text-slate-800 mb-2">Error de Acceso</h3>
+            <h3 className="text-lg font-bold text-slate-800 mb-2">No Disponible</h3>
             <p className="text-slate-500 mb-6 max-w-sm">{error}</p>
             {!userProfile && (
                 <button onClick={() => navigate('/login')} className="bg-brand-800 text-white px-6 py-2 rounded-lg font-bold shadow-lg hover:bg-brand-900">
@@ -237,17 +253,38 @@ const Badge = () => {
 
             <div className="mt-6 flex justify-center flex-col items-center gap-2">
               <div className="p-2 bg-white border border-slate-100 rounded-lg shadow-inner">
-                <img src={QR_DATA_IMG} alt="User QR" className="w-48 h-48" />
+                {QR_DATA_IMG && <img src={QR_DATA_IMG} alt="User QR" className="w-48 h-48" />}
               </div>
               
-              <div className="mt-2 w-full">
-                 <p className="text-[9px] text-slate-400 font-mono break-all leading-tight bg-slate-50 p-1 rounded border border-slate-100 select-all">
+              {/* URL Display and Debug Info */}
+              <div className="mt-4 w-full text-left bg-slate-50 p-3 rounded-lg border border-slate-200">
+                 <div className="flex justify-between items-center mb-1">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase">Enlace de Validación</span>
+                    <button onClick={handleCopyUrl} className="text-brand-600 hover:text-brand-800 flex items-center gap-1 text-[10px] font-bold" title="Copiar enlace">
+                        <Copy size={12} /> COPIAR
+                    </button>
+                 </div>
+                 <p className="text-[9px] text-slate-400 font-mono break-all leading-tight bg-white p-1 rounded border border-slate-100">
                     {qrUrl}
                  </p>
-                 <a href={qrUrl} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-1 text-xs text-brand-600 font-bold mt-1 hover:underline">
-                    <ExternalLink size={10} /> Probar Enlace
-                 </a>
+                 
+                 {/* Warning for Preview Environments */}
+                 {(qrUrl.includes('usercontent.goog') || qrUrl.includes('webcontainer') || qrUrl.includes('stackblitz') || qrUrl.includes('localhost')) && (
+                     <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                        <h4 className="text-xs font-bold text-blue-800 flex items-center gap-2 mb-1">
+                            <Info size={14} /> Modo Desarrollo Detectado
+                        </h4>
+                        <p className="text-[10px] text-blue-700 leading-relaxed">
+                           Estás ejecutando la app en un entorno privado. 
+                           <strong> El enlace QR probablemente NO funcionará en tu celular</strong> porque requiere acceso autenticado a la nube de desarrollo.
+                           <br/><br/>
+                           Para que el QR sea accesible públicamente para cualquier persona:
+                           <strong> Debes publicar (Deploy) la aplicación</strong> en un servidor real como Firebase Hosting o Vercel.
+                        </p>
+                     </div>
+                 )}
               </div>
+
             </div>
             <p className="text-xs text-slate-400 mt-2">
                 {isSelf ? 'Presente este código para validación en campo' : 'Código de validación del operario'}
