@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Menu, 
   X, 
@@ -9,13 +9,27 @@ import {
   Database,
   Loader2,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  FileText,
+  AlertTriangle
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { db } from '../services/firebase';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { MOCRecord, MOCStatus, TrainingPlan, Course, UserTrainingProgress } from '../types';
 
 interface LayoutProps {
   children?: React.ReactNode;
+}
+
+interface NotificationItem {
+  id: string;
+  type: 'moc' | 'training';
+  title: string;
+  subtitle: string;
+  path: string;
+  isUrgent?: boolean;
 }
 
 // Helper to extract real image URL from Google Redirects
@@ -36,6 +50,10 @@ const getCleanImageSrc = (url?: string | null) => {
 
 const Layout = ({ children }: LayoutProps) => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const notifRef = useRef<HTMLDivElement>(null);
+
   const navigate = useNavigate();
   const location = useLocation();
   const { logout, user, userProfile, loading } = useAuth();
@@ -46,6 +64,98 @@ const Layout = ({ children }: LayoutProps) => {
       setSidebarOpen(false);
     }
   }, []);
+
+  // Close notifications on outside click
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
+        setShowNotifications(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Fetch Notifications Logic
+  useEffect(() => {
+    if (!userProfile) return;
+
+    const fetchNotifications = async () => {
+      const newNotifs: NotificationItem[] = [];
+
+      try {
+        // 1. Fetch Pending MOC Approvals
+        const mocQ = query(
+          collection(db, 'mocs'),
+          where('approverId', '==', userProfile.id),
+          where('status', '==', MOCStatus.PENDING)
+        );
+        const mocSnap = await getDocs(mocQ);
+        mocSnap.forEach(doc => {
+          const data = doc.data() as MOCRecord;
+          newNotifs.push({
+            id: `moc-${doc.id}`,
+            type: 'moc',
+            title: 'Aprobación Requerida',
+            subtitle: `MDC: ${data.title}`,
+            path: '/moc',
+            isUrgent: true
+          });
+        });
+
+        // 2. Fetch Expiring/Expired Training
+        // Need plans to know what user should have
+        const plansSnap = await getDocs(collection(db, 'plans'));
+        const plans = plansSnap.docs.map(d => ({id:d.id, ...d.data()} as TrainingPlan));
+        const myPlan = plans.find(p => p.positionIds.includes(userProfile.position));
+
+        if (myPlan) {
+            const coursesSnap = await getDocs(collection(db, 'courses'));
+            const courses = coursesSnap.docs.map(d => ({id:d.id, ...d.data()} as Course));
+            const myCourses = courses.filter(c => myPlan.courseIds.includes(c.id));
+
+            const progressSnap = await getDocs(query(collection(db, 'training_progress'), where('userId', '==', userProfile.id)));
+            const progress = progressSnap.docs.map(d => d.data() as UserTrainingProgress);
+
+            myCourses.forEach(c => {
+                const p = progress.find(pr => pr.courseId === c.id);
+                if (p?.status === 'COMPLETED' && p.completionDate) {
+                    const expiryDate = new Date(p.completionDate);
+                    expiryDate.setMonth(expiryDate.getMonth() + c.validityMonths);
+                    const now = new Date();
+                    const diffDays = Math.ceil((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                    
+                    if (diffDays < 0) {
+                        newNotifs.push({
+                            id: `exp-${c.id}`,
+                            type: 'training',
+                            title: 'Capacitación Vencida',
+                            subtitle: c.title,
+                            path: '/training',
+                            isUrgent: true
+                        });
+                    } else if (diffDays <= 30) {
+                        newNotifs.push({
+                            id: `warn-${c.id}`,
+                            type: 'training',
+                            title: 'Vence Pronto',
+                            subtitle: `${c.title} (${diffDays} días)`,
+                            path: '/training',
+                            isUrgent: false
+                        });
+                    }
+                }
+            });
+        }
+      } catch (e) {
+        console.error("Error fetching notifications", e);
+      }
+
+      setNotifications(newNotifs);
+    };
+
+    fetchNotifications();
+  }, [userProfile, location.pathname]); // Re-fetch on navigation to keep fresh
 
   const navItems = [
     { label: 'Inicio', icon: <LayoutDashboard size={20} />, path: '/' },
@@ -145,7 +255,7 @@ const Layout = ({ children }: LayoutProps) => {
               <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center shrink-0 text-brand-800 font-bold">
                 H&S
               </div>
-              <span className={`font-bold text-xl tracking-tight whitespace-nowrap transition-all duration-300 origin-left ${sidebarOpen ? 'opacity-100 scale-100 ml-0' : 'opacity-0 scale-90 w-0 ml-0 overflow-hidden'}`}>
+              <span className={`font-bold text-xl tracking-tight whitespace-nowrap transition-all duration-300 origin-left ${sidebarOpen ? 'opacity-100 scale-100 ml-0' : 'opacity-0 scale-90 w-0 ml-0 overflow-hidden hidden'}`}>
                 Management
               </span>
             </div>
@@ -173,13 +283,13 @@ const Layout = ({ children }: LayoutProps) => {
                 <span className="shrink-0">{item.icon}</span>
                 
                 {/* Smooth collapse for text: adjust opacity and width/overflow to prevent abrupt jumps */}
-                <span className={`font-medium transition-all duration-300 ${sidebarOpen ? 'opacity-100 w-auto translate-x-0' : 'opacity-0 w-0 -translate-x-4 overflow-hidden'}`}>
+                <span className={`font-medium transition-all duration-300 ${sidebarOpen ? 'opacity-100 w-auto translate-x-0' : 'opacity-0 w-0 -translate-x-4 overflow-hidden hidden'}`}>
                   {item.label}
                 </span>
 
                 {/* Tooltip for collapsed mode */}
                 {!sidebarOpen && (
-                  <div className="absolute left-16 bg-slate-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 pointer-events-none shadow-md">
+                  <div className="absolute left-14 bg-slate-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 pointer-events-none shadow-md">
                     {item.label}
                   </div>
                 )}
@@ -196,7 +306,7 @@ const Layout = ({ children }: LayoutProps) => {
                 referrerPolicy="no-referrer"
                 className="w-10 h-10 rounded-full border-2 border-slate-400 shrink-0 object-cover bg-slate-100"
               />
-              <div className={`overflow-hidden transition-all duration-300 ${sidebarOpen ? 'opacity-100 w-auto' : 'opacity-0 w-0'}`}>
+              <div className={`overflow-hidden transition-all duration-300 ${sidebarOpen ? 'opacity-100 w-auto' : 'opacity-0 w-0 hidden'}`}>
                 <p className="text-sm font-semibold truncate">{displayName}</p>
                 <p className="text-xs text-slate-400 truncate" title={displayRole || ''}>{displayRole}</p>
               </div>
@@ -208,7 +318,7 @@ const Layout = ({ children }: LayoutProps) => {
               className={`flex items-center gap-2 text-slate-400 hover:text-white text-sm w-full whitespace-nowrap transition-all ${!sidebarOpen ? 'justify-center' : ''}`}
             >
               <LogOut size={20} /> 
-              <span className={`transition-all duration-300 ${sidebarOpen ? 'opacity-100 w-auto' : 'opacity-0 w-0 overflow-hidden'}`}>Cerrar Sesión</span>
+              <span className={`transition-all duration-300 ${sidebarOpen ? 'opacity-100 w-auto' : 'opacity-0 w-0 overflow-hidden hidden'}`}>Cerrar Sesión</span>
             </button>
           </div>
       </aside>
@@ -228,11 +338,54 @@ const Layout = ({ children }: LayoutProps) => {
             <h1 className="text-lg font-semibold text-brand-800 lg:hidden">H&S Management</h1>
           </div>
 
-          <div className="flex items-center gap-4">
-            <button className="relative p-2 text-slate-500 hover:bg-slate-100 rounded-full transition-colors">
-              <Bell size={20} />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border border-white"></span>
-            </button>
+          <div className="flex items-center gap-4" ref={notifRef}>
+            <div className="relative">
+              <button 
+                onClick={() => setShowNotifications(!showNotifications)}
+                className="relative p-2 text-slate-500 hover:bg-slate-100 rounded-full transition-colors"
+              >
+                <Bell size={20} />
+                {notifications.length > 0 && (
+                  <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white animate-pulse"></span>
+                )}
+              </button>
+
+              {/* Notification Dropdown */}
+              {showNotifications && (
+                <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-xl border border-slate-100 z-50 overflow-hidden animate-fade-in">
+                  <div className="px-4 py-3 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+                    <h3 className="text-sm font-bold text-slate-800">Notificaciones</h3>
+                    <span className="text-xs bg-brand-100 text-brand-700 px-2 py-0.5 rounded-full font-bold">{notifications.length}</span>
+                  </div>
+                  <div className="max-h-80 overflow-y-auto">
+                    {notifications.length === 0 ? (
+                      <div className="p-8 text-center text-slate-400">
+                        <Bell size={24} className="mx-auto mb-2 opacity-50" />
+                        <p className="text-xs">No tienes notificaciones pendientes.</p>
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-slate-50">
+                        {notifications.map((n) => (
+                          <button 
+                            key={n.id}
+                            onClick={() => { navigate(n.path); setShowNotifications(false); }}
+                            className="w-full text-left px-4 py-3 hover:bg-slate-50 transition-colors flex items-start gap-3"
+                          >
+                             <div className={`mt-1 shrink-0 p-1.5 rounded-full ${n.type === 'moc' ? 'bg-blue-100 text-blue-600' : 'bg-orange-100 text-orange-600'}`}>
+                                {n.type === 'moc' ? <FileText size={14} /> : <AlertTriangle size={14} />}
+                             </div>
+                             <div>
+                                <p className={`text-xs font-bold ${n.isUrgent ? 'text-red-600' : 'text-slate-700'}`}>{n.title}</p>
+                                <p className="text-xs text-slate-500 line-clamp-2">{n.subtitle}</p>
+                             </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </header>
 

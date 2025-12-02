@@ -11,63 +11,10 @@ import {
   Clock,
   AlertCircle
 } from 'lucide-react';
-import { UserTrainingProgress, TrainingPlan, Course } from '../types';
+import { UserTrainingProgress, TrainingPlan, Course, MOCStatus } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../services/firebase';
 import { collection, getDocs, query, where } from 'firebase/firestore';
-
-interface ModuleCardProps {
-  title: string;
-  description: string;
-  icon: React.ElementType;
-  path: string;
-  colorClass: string;
-  iconColorClass: string;
-  badges?: { label: string | number, color: string, icon?: React.ElementType }[];
-}
-
-const appModules = [
-  {
-    id: 'moc',
-    title: 'Manejo del Cambio',
-    description: 'Gestión de riesgos y aprobación de cambios operativos.',
-    icon: FileText,
-    path: '/moc',
-    colorClass: 'hover:border-blue-500 hover:shadow-blue-100',
-    iconColorClass: 'bg-blue-100 text-blue-700',
-    roles: ['All']
-  },
-  {
-    id: 'scaffolds',
-    title: 'Inspección de Andamios',
-    description: 'Checklist de seguridad y habilitación de estructuras.',
-    icon: Construction,
-    path: '/scaffolds',
-    colorClass: 'hover:border-orange-500 hover:shadow-orange-100',
-    iconColorClass: 'bg-orange-100 text-orange-700',
-    roles: ['All']
-  },
-  {
-    id: 'training',
-    title: 'Formación',
-    description: 'Mis capacitaciones, exámenes y material de estudio.',
-    icon: GraduationCap,
-    path: '/training',
-    colorClass: 'hover:border-purple-500 hover:shadow-purple-100',
-    iconColorClass: 'bg-purple-100 text-purple-700',
-    roles: ['All']
-  },
-  {
-    id: 'badge',
-    title: 'Mis Habilitaciones',
-    description: 'Credencial digital QR y estado de certificaciones.',
-    icon: QrCode,
-    path: '/badge',
-    colorClass: 'hover:border-emerald-500 hover:shadow-emerald-100',
-    iconColorClass: 'bg-emerald-100 text-emerald-700',
-    roles: ['All']
-  }
-];
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -77,6 +24,7 @@ const Dashboard = () => {
   const [plans, setPlans] = useState<TrainingPlan[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
   const [myProgress, setMyProgress] = useState<UserTrainingProgress[]>([]);
+  const [pendingMocCount, setPendingMocCount] = useState(0);
 
   useEffect(() => {
     const fetchConfig = async () => {
@@ -94,20 +42,34 @@ const Dashboard = () => {
     fetchConfig();
   }, []);
 
-  // Fetch real progress
+  // Fetch real progress and MOCs
   useEffect(() => {
-      const fetchProgress = async () => {
+      const fetchUserData = async () => {
           if (!userProfile?.id && !user?.uid) return;
           const uid = userProfile?.id || user?.uid;
+          
           try {
-             const q = query(collection(db, 'training_progress'), where('userId', '==', uid));
-             const snap = await getDocs(q);
-             setMyProgress(snap.docs.map(d => d.data() as UserTrainingProgress));
+             // Training Progress
+             const qProgress = query(collection(db, 'training_progress'), where('userId', '==', uid));
+             const snapProgress = await getDocs(qProgress);
+             setMyProgress(snapProgress.docs.map(d => d.data() as UserTrainingProgress));
+
+             // Pending MOCs Approvals
+             if (userProfile?.id) {
+                const qMoc = query(
+                    collection(db, 'mocs'), 
+                    where('approverId', '==', userProfile.id), 
+                    where('status', '==', MOCStatus.PENDING)
+                );
+                const snapMoc = await getDocs(qMoc);
+                setPendingMocCount(snapMoc.size);
+             }
+
           } catch(e) {
-              console.error("Error loading dashboard progress", e);
+              console.error("Error loading dashboard user data", e);
           }
       };
-      fetchProgress();
+      fetchUserData();
   }, [userProfile, user]);
 
   // Fallback if profile is not loaded yet
@@ -152,6 +114,53 @@ const Dashboard = () => {
 
     return { pending, expiring };
   }, [CURRENT_USER_POSITION, plans, courses, myProgress]);
+
+  // Define modules inside component to access state
+  const appModules = [
+    {
+      id: 'moc',
+      title: 'Manejo del Cambio',
+      description: 'Gestión de riesgos y aprobación de cambios operativos.',
+      icon: FileText,
+      path: '/moc',
+      colorClass: 'hover:border-blue-500 hover:shadow-blue-100',
+      iconColorClass: 'bg-blue-100 text-blue-700',
+      badges: pendingMocCount > 0 ? [{ label: `${pendingMocCount} Pendientes`, color: 'bg-red-100 text-red-700', icon: AlertCircle }] : []
+    },
+    {
+      id: 'scaffolds',
+      title: 'Inspección de Andamios',
+      description: 'Checklist de seguridad y habilitación de estructuras.',
+      icon: Construction,
+      path: '/scaffolds',
+      colorClass: 'hover:border-orange-500 hover:shadow-orange-100',
+      iconColorClass: 'bg-orange-100 text-orange-700',
+      badges: []
+    },
+    {
+      id: 'training',
+      title: 'Formación',
+      description: 'Mis capacitaciones, exámenes y material de estudio.',
+      icon: GraduationCap,
+      path: '/training',
+      colorClass: 'hover:border-purple-500 hover:shadow-purple-100',
+      iconColorClass: 'bg-purple-100 text-purple-700',
+      badges: [
+          trainingStats.pending > 0 ? { label: `${trainingStats.pending} Pendientes`, color: 'bg-red-100 text-red-700', icon: AlertCircle } : null,
+          trainingStats.expiring > 0 ? { label: `${trainingStats.expiring} Por vencer`, color: 'bg-orange-100 text-orange-700', icon: Clock } : null
+      ].filter(Boolean) as any[]
+    },
+    {
+      id: 'badge',
+      title: 'Mis Habilitaciones',
+      description: 'Credencial digital QR y estado de certificaciones.',
+      icon: QrCode,
+      path: '/badge',
+      colorClass: 'hover:border-emerald-500 hover:shadow-emerald-100',
+      iconColorClass: 'bg-emerald-100 text-emerald-700',
+      badges: []
+    }
+  ];
 
   return (
     <div className="space-y-8">
@@ -212,19 +221,14 @@ const Dashboard = () => {
                 {module.description}
               </p>
 
-              {/* Dynamic Badges for Training */}
-              {module.id === 'training' && (
-                <div className="flex gap-2 mt-auto">
-                   {trainingStats.pending > 0 && (
-                     <span className="px-2 py-1 bg-red-100 text-red-700 text-xs font-bold rounded-full flex items-center gap-1">
-                       <AlertCircle size={12}/> {trainingStats.pending} Pendientes
+              {/* Dynamic Badges */}
+              {module.badges && module.badges.length > 0 && (
+                <div className="flex gap-2 mt-auto flex-wrap">
+                   {module.badges.map((badge, idx) => (
+                     <span key={idx} className={`px-2 py-1 text-xs font-bold rounded-full flex items-center gap-1 ${badge.color}`}>
+                       {badge.icon && <badge.icon size={12}/>} {badge.label}
                      </span>
-                   )}
-                   {trainingStats.expiring > 0 && (
-                     <span className="px-2 py-1 bg-orange-100 text-orange-700 text-xs font-bold rounded-full flex items-center gap-1">
-                       <Clock size={12}/> {trainingStats.expiring} Por vencer
-                     </span>
-                   )}
+                   ))}
                 </div>
               )}
             </button>
