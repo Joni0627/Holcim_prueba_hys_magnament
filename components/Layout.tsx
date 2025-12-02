@@ -7,7 +7,9 @@ import {
   LogOut,
   Bell,
   Database,
-  Loader2
+  Loader2,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -39,6 +41,7 @@ const Layout = ({ children }: LayoutProps) => {
   const { logout, user, userProfile, loading } = useAuth();
 
   useEffect(() => {
+    // On mobile, start closed. On desktop, start open.
     if (window.innerWidth < 1024) {
       setSidebarOpen(false);
     }
@@ -122,6 +125,7 @@ const Layout = ({ children }: LayoutProps) => {
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden">
+      {/* Mobile Overlay */}
       {sidebarOpen && (
         <div 
           className="fixed inset-0 z-40 bg-black/50 lg:hidden"
@@ -129,78 +133,99 @@ const Layout = ({ children }: LayoutProps) => {
         />
       )}
 
+      {/* Sidebar */}
       <aside className={`
-        fixed inset-y-0 left-0 z-50 bg-brand-800 text-white transition-all duration-300 ease-in-out overflow-hidden
+        fixed inset-y-0 left-0 z-50 bg-brand-800 text-white transition-all duration-300 ease-in-out flex flex-col
         lg:relative
-        ${sidebarOpen ? 'w-64 translate-x-0' : '-translate-x-full w-64 lg:w-0 lg:translate-x-0'}
+        ${sidebarOpen ? 'w-64 translate-x-0' : '-translate-x-full lg:translate-x-0 lg:w-20'}
       `}>
-        <div className="w-64 h-full flex flex-col">
-          <div className="flex items-center justify-between p-4 border-b border-brand-700 min-h-[64px]">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center shrink-0">
-                <span className="font-bold text-brand-800">H&S</span>
+          {/* Header */}
+          <div className={`flex items-center ${sidebarOpen ? 'justify-between px-4' : 'justify-center'} h-16 border-b border-brand-700 shrink-0 transition-all duration-300`}>
+            <div className="flex items-center gap-2 overflow-hidden">
+              <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center shrink-0 text-brand-800 font-bold">
+                H&S
               </div>
-              <span className="font-bold text-xl tracking-tight whitespace-nowrap">Management</span>
+              <span className={`font-bold text-xl tracking-tight whitespace-nowrap transition-opacity duration-200 ${sidebarOpen ? 'opacity-100' : 'opacity-0 hidden'}`}>
+                Management
+              </span>
             </div>
+            {/* Mobile Close Button */}
             <button onClick={() => setSidebarOpen(false)} className="text-slate-300 hover:text-white lg:hidden">
               <X size={24} />
             </button>
-            <button onClick={() => setSidebarOpen(false)} className="hidden lg:block text-slate-300 hover:text-white">
-               <X size={24} />
-            </button>
           </div>
 
-          <nav className="p-4 space-y-1 flex-1 overflow-y-auto">
+          {/* Nav Items */}
+          <nav className="p-2 space-y-1 flex-1 overflow-y-auto overflow-x-hidden py-4">
             {navItems.map((item) => (
               <button
                 key={item.path}
                 onClick={() => handleNav(item.path)}
-                className={`flex items-center gap-3 w-full p-3 rounded-lg transition-colors whitespace-nowrap ${
-                  location.pathname === item.path 
-                    ? 'bg-brand-700 text-white shadow-lg border-l-4 border-white' 
-                    : 'text-slate-300 hover:bg-brand-700/50 hover:text-white'
-                }`}
+                title={!sidebarOpen ? item.label : ''}
+                className={`
+                  flex items-center gap-3 w-full p-3 rounded-lg transition-all duration-200 whitespace-nowrap relative group
+                  ${location.pathname === item.path 
+                    ? 'bg-brand-700 text-white shadow-lg' 
+                    : 'text-slate-300 hover:bg-brand-700/50 hover:text-white'}
+                  ${!sidebarOpen ? 'justify-center' : ''}
+                `}
               >
-                {item.icon}
-                <span className="font-medium">{item.label}</span>
+                <span className="shrink-0">{item.icon}</span>
+                
+                <span className={`font-medium transition-all duration-200 ${sidebarOpen ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-4 absolute left-12 pointer-events-none hidden'}`}>
+                  {item.label}
+                </span>
+
+                {/* Tooltip for collapsed mode */}
+                {!sidebarOpen && (
+                  <div className="absolute left-14 bg-slate-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 pointer-events-none shadow-md">
+                    {item.label}
+                  </div>
+                )}
               </button>
             ))}
           </nav>
 
-          <div className="p-4 border-t border-brand-700 bg-brand-900 shrink-0">
-            <div className="flex items-center gap-3 mb-4">
+          {/* Footer User Profile */}
+          <div className="p-4 border-t border-brand-700 bg-brand-900 shrink-0 overflow-hidden">
+            <div className={`flex items-center gap-3 mb-4 transition-all duration-300 ${!sidebarOpen ? 'justify-center' : ''}`}>
               <img 
                 src={avatarUrl}
                 alt="User" 
                 referrerPolicy="no-referrer"
                 className="w-10 h-10 rounded-full border-2 border-slate-400 shrink-0 object-cover bg-slate-100"
               />
-              <div className="overflow-hidden">
+              <div className={`overflow-hidden transition-all duration-200 ${sidebarOpen ? 'opacity-100 w-auto' : 'opacity-0 w-0 hidden'}`}>
                 <p className="text-sm font-semibold truncate">{displayName}</p>
                 <p className="text-xs text-slate-400 truncate" title={displayRole || ''}>{displayRole}</p>
               </div>
             </div>
+            
             <button 
               onClick={handleLogout}
-              className="flex items-center gap-2 text-slate-400 hover:text-white text-sm w-full whitespace-nowrap"
+              title={!sidebarOpen ? "Cerrar Sesión" : ""}
+              className={`flex items-center gap-2 text-slate-400 hover:text-white text-sm w-full whitespace-nowrap transition-all ${!sidebarOpen ? 'justify-center' : ''}`}
             >
-              <LogOut size={16} /> 
-              Cerrar Sesión
+              <LogOut size={20} /> 
+              <span className={`${sidebarOpen ? 'block' : 'hidden'}`}>Cerrar Sesión</span>
             </button>
           </div>
-        </div>
       </aside>
 
-      <main className="flex-1 flex flex-col h-full overflow-hidden w-full">
+      {/* Main Content */}
+      <main className="flex-1 flex flex-col h-full overflow-hidden w-full relative">
         <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 lg:px-8 shadow-sm z-10 shrink-0">
           <div className="flex items-center gap-4">
             <button 
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="text-slate-600 hover:text-slate-900"
+              className="text-slate-600 hover:text-slate-900 p-2 rounded-full hover:bg-slate-100 transition-colors"
             >
-              <Menu size={24} />
+              {/* Show Menu icon on mobile always. On desktop, show Chevron if open/closed for clarity, or just Menu */}
+              <Menu size={24} className="lg:hidden" />
+              {sidebarOpen ? <ChevronLeft size={24} className="hidden lg:block" /> : <Menu size={24} className="hidden lg:block" />}
             </button>
             <h1 className="text-lg font-semibold text-brand-800 lg:hidden">H&S Management</h1>
+            {/* Breadcrumb or Title for Desktop could go here */}
           </div>
 
           <div className="flex items-center gap-4">
