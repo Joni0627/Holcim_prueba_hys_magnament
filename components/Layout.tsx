@@ -16,7 +16,8 @@ interface LayoutProps {
 }
 
 // Helper to extract real image URL from Google Redirects
-const getCleanImageSrc = (url?: string) => {
+// Updated to accept null to satisfy TypeScript strict checks with Firebase User
+const getCleanImageSrc = (url?: string | null) => {
   if (!url) return undefined;
   if (url.includes('google.com/imgres')) {
     try {

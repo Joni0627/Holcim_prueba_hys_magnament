@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Certification, Course, UserTrainingProgress, User } from '../types';
 import { QrCode, Shield, Calendar, UserCheck, ArrowLeft, Loader2, ShieldAlert, ExternalLink, Info, Copy } from 'lucide-react';
@@ -8,7 +7,7 @@ import { db } from '../services/firebase';
 import { collection, getDocs, query, where, doc, getDoc } from 'firebase/firestore';
 
 // Helper to extract real image URL from Google Redirects
-const getCleanImageSrc = (url?: string) => {
+const getCleanImageSrc = (url?: string | null) => {
   if (!url) return undefined;
   if (url.includes('google.com/imgres')) {
     try {

@@ -6,7 +6,7 @@ import { db } from '../services/firebase';
 import { collection, getDocs, addDoc, updateDoc, doc, deleteDoc, setDoc } from 'firebase/firestore';
 
 // Helper to extract real image URL from Google Redirects (Same as in Layout and Badge)
-const getCleanImageSrc = (url?: string) => {
+const getCleanImageSrc = (url?: string | null) => {
   if (!url) return undefined;
   if (url.includes('google.com/imgres')) {
     try {
