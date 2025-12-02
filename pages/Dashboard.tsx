@@ -1,4 +1,5 @@
-import React, { useMemo } from 'react';
+
+import React, { useMemo, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   FileText, 
@@ -10,9 +11,10 @@ import {
   Clock,
   AlertCircle
 } from 'lucide-react';
-import { INITIAL_PLANS, INITIAL_COURSES } from './MasterData';
-import { UserTrainingProgress } from '../types';
+import { UserTrainingProgress, TrainingPlan, Course } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { db } from '../services/firebase';
+import { collection, getDocs } from 'firebase/firestore';
 
 interface ModuleCardProps {
   title: string;
@@ -70,6 +72,26 @@ const appModules = [
 const Dashboard = () => {
   const navigate = useNavigate();
   const { userProfile, user } = useAuth();
+  
+  // Real config from DB
+  const [plans, setPlans] = useState<TrainingPlan[]>([]);
+  const [courses, setCourses] = useState<Course[]>([]);
+
+  useEffect(() => {
+    const fetchConfig = async () => {
+      try {
+        const [plansSnap, coursesSnap] = await Promise.all([
+           getDocs(collection(db, 'plans')),
+           getDocs(collection(db, 'courses'))
+        ]);
+        setPlans(plansSnap.docs.map(d => ({id: d.id, ...d.data()} as TrainingPlan)));
+        setCourses(coursesSnap.docs.map(d => ({id: d.id, ...d.data()} as Course)));
+      } catch (e) {
+        console.error("Error loading config for dashboard stats", e);
+      }
+    };
+    fetchConfig();
+  }, []);
 
   // Fallback if profile is not loaded yet
   const displayName = userProfile?.firstName || 'Usuario';
@@ -84,10 +106,12 @@ const Dashboard = () => {
 
   // Calculate stats for Training Badge
   const trainingStats = useMemo(() => {
-    const myPlan = INITIAL_PLANS.find(p => p.positionIds.includes(CURRENT_USER_POSITION));
+    if (plans.length === 0) return { pending: 0, expiring: 0 };
+    
+    const myPlan = plans.find(p => p.positionIds.includes(CURRENT_USER_POSITION));
     if (!myPlan) return { pending: 0, expiring: 0 };
 
-    const myCourses = INITIAL_COURSES.filter(c => myPlan.courseIds.includes(c.id));
+    const myCourses = courses.filter(c => myPlan.courseIds.includes(c.id));
     
     let pending = 0;
     let expiring = 0; // Mock expiring logic
@@ -102,7 +126,7 @@ const Dashboard = () => {
     });
 
     return { pending, expiring };
-  }, [CURRENT_USER_POSITION]);
+  }, [CURRENT_USER_POSITION, plans, courses]);
 
   return (
     <div className="space-y-8">

@@ -1,10 +1,11 @@
 
-import React, { useState, useMemo } from 'react';
-import { PlayCircle, FileText, CheckCircle, Clock, AlertCircle, Award, Video, Lock, ClipboardCheck, UserCheck, ArrowLeft, Layers } from 'lucide-react';
-import { Course, Evaluation, UserTrainingProgress, QuizAttempt } from '../types';
-import { INITIAL_COURSES, INITIAL_EVALUATIONS, INITIAL_PLANS } from './MasterData';
+import React, { useState, useMemo, useEffect } from 'react';
+import { PlayCircle, FileText, CheckCircle, Clock, AlertCircle, Award, Video, Lock, ClipboardCheck, UserCheck, ArrowLeft, Layers, Loader2 } from 'lucide-react';
+import { Course, Evaluation, UserTrainingProgress, QuizAttempt, TrainingPlan } from '../types';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { db } from '../services/firebase';
+import { collection, getDocs } from 'firebase/firestore';
 
 // --- MOCK PROGRESS DB (Would be fetched from Firestore in full version) ---
 const MOCK_PROGRESS: UserTrainingProgress[] = [
@@ -87,11 +88,39 @@ const Training = () => {
   const [activeGroupKey, setActiveGroupKey] = useState<string | null>(null);
   const [myProgress, setMyProgress] = useState<UserTrainingProgress[]>(MOCK_PROGRESS);
 
+  // Dynamic Data State
+  const [isLoadingData, setIsLoadingData] = useState(true);
+  const [plans, setPlans] = useState<TrainingPlan[]>([]);
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
+
   const currentUserPosition = userProfile?.position || '';
   const currentUserId = userProfile?.id || user?.uid || 'unknown';
 
+  // Fetch Data from Firestore
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setIsLoadingData(true);
+        const [plansSnap, coursesSnap, evalsSnap] = await Promise.all([
+          getDocs(collection(db, 'plans')),
+          getDocs(collection(db, 'courses')),
+          getDocs(collection(db, 'evaluations'))
+        ]);
+
+        setPlans(plansSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as TrainingPlan)));
+        setCourses(coursesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Course)));
+        setEvaluations(evalsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Evaluation)));
+      } catch (error) {
+        console.error("Error fetching training config:", error);
+      } finally {
+        setIsLoadingData(false);
+      }
+    };
+    fetchData();
+  }, []);
+
   // Logic to determine if user can see HS Validation tab
-  // Checks if user is Supervisor, Manager, or HYS staff
   const isHSPersonnel = 
       userProfile?.role === 'Supervisor' || 
       userProfile?.role === 'Jefatura' || 
@@ -99,17 +128,20 @@ const Training = () => {
       userProfile?.position?.includes('HYS');
 
   // 1. Find User's Plan based on Position
-  const myPlan = INITIAL_PLANS.find(p => p.positionIds.includes(currentUserPosition));
+  const myPlan = useMemo(() => {
+    return plans.find(p => p.positionIds.includes(currentUserPosition));
+  }, [plans, currentUserPosition]);
   
   // 2. Get Courses from that Plan
-  const myCourses = myPlan ? INITIAL_COURSES.filter(c => myPlan.courseIds.includes(c.id)) : [];
+  const myCourses = useMemo(() => {
+    return myPlan ? courses.filter(c => myPlan.courseIds.includes(c.id)) : [];
+  }, [myPlan, courses]);
 
   // 3. Group Courses by Evaluation ID
   const groupedCourses: CourseGroup[] = useMemo(() => {
     const groups: Record<string, Course[]> = {};
     
     myCourses.forEach(c => {
-      // If course has evaluation, group by it. If not, use unique ID to keep separate.
       const key = c.evaluationId || `no-eval-${c.id}`;
       if (!groups[key]) groups[key] = [];
       groups[key].push(c);
@@ -117,22 +149,18 @@ const Training = () => {
 
     return Object.keys(groups).map(key => {
       const groupCourses = groups[key];
-      // Find evaluation object if ID exists
-      const evaluation = INITIAL_EVALUATIONS.find(e => e.id === groupCourses[0].evaluationId);
+      const evaluation = evaluations.find(e => e.id === groupCourses[0].evaluationId);
       
-      // Check group status
       const allCompleted = groupCourses.every(c => {
         const p = myProgress.find(mp => mp.courseId === c.id);
         return p?.status === 'COMPLETED';
       });
 
-      // Check pending practical
       const hasPendingPractical = groupCourses.some(c => {
         const p = myProgress.find(mp => mp.courseId === c.id);
         return p?.status === 'PENDING_PRACTICAL';
       });
 
-      // Check if materials are viewed for all courses in group
       const allMaterialsViewed = groupCourses.every(c => {
         const p = myProgress.find(mp => mp.courseId === c.id);
         return p?.materialViewed === true;
@@ -147,7 +175,7 @@ const Training = () => {
         canTakeExam: allMaterialsViewed && !allCompleted && !hasPendingPractical && !!evaluation
       };
     });
-  }, [myCourses, myProgress]);
+  }, [myCourses, myProgress, evaluations]);
 
   // --- ACTIONS ---
 
@@ -265,6 +293,17 @@ const Training = () => {
   };
 
   // --- RENDERERS ---
+
+  if (isLoadingData) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="animate-spin text-brand-600" size={40} />
+          <p className="text-slate-500 font-medium">Cargando Plan de Capacitación...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (activeCourse && viewMode === 'details') {
     return (
@@ -391,7 +430,7 @@ const Training = () => {
                           <tr><td colSpan={4} className="p-8 text-center text-slate-400 italic">No hay validaciones prácticas pendientes.</td></tr>
                       )}
                       {pendingPracticalItems.map((item, idx) => {
-                          const course = INITIAL_COURSES.find(c => c.id === item.courseId);
+                          const course = courses.find(c => c.id === item.courseId);
                           return (
                             <tr key={idx} className="border-b border-slate-100 hover:bg-slate-50">
                                 <td className="p-4 font-bold text-slate-800">Juan Perez (27334)</td>
