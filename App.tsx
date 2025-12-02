@@ -83,10 +83,9 @@ const AppRoutes = () => {
               <Layout><Training /></Layout>
             </ProtectedRoute>
           } />
+          {/* Public Route for QR Scanning */}
           <Route path="/badge" element={
-            <ProtectedRoute>
-              <Layout><Badge /></Layout>
-            </ProtectedRoute>
+            <Layout><Badge /></Layout>
           } />
         </Routes>
       </HashRouter>

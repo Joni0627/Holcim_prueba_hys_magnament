@@ -4,6 +4,7 @@ import {
   X, 
   LayoutDashboard, 
   LogOut,
+  LogIn,
   Bell,
   Database
 } from 'lucide-react';
@@ -56,6 +57,10 @@ const Layout = ({ children }: LayoutProps) => {
   };
 
   const handleLogout = async () => {
+    if (!user) {
+        navigate('/login');
+        return;
+    }
     try {
       await logout();
       navigate('/login');
@@ -64,14 +69,15 @@ const Layout = ({ children }: LayoutProps) => {
     }
   };
 
-  // Determine display name
+  // Determine display name (Handle Guest)
+  const isGuest = !user;
   const displayName = userProfile 
     ? `${userProfile.firstName} ${userProfile.lastName}` 
-    : (user?.email?.split('@')[0] || 'Usuario');
+    : (user ? user.email?.split('@')[0] : 'Invitado');
     
   const displayRole = userProfile 
     ? (userProfile.position || userProfile.role)
-    : user?.email;
+    : (user ? user.email : 'Acceso Público');
 
   // Determine avatar URL with priority: Firestore Profile -> Firebase Auth -> Generated Initials
   // We apply cleaning to the URL to handle Google Redirect links copy-pasted by users
@@ -143,7 +149,8 @@ const Layout = ({ children }: LayoutProps) => {
               onClick={handleLogout}
               className="flex items-center gap-2 text-slate-400 hover:text-white text-sm w-full whitespace-nowrap"
             >
-              <LogOut size={16} /> Cerrar Sesión
+              {isGuest ? <LogIn size={16} /> : <LogOut size={16} />} 
+              {isGuest ? 'Iniciar Sesión' : 'Cerrar Sesión'}
             </button>
           </div>
         </div>

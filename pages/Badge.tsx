@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect } from 'react';
 import { Certification, Course, UserTrainingProgress, User } from '../types';
-import { QrCode, Shield, Calendar, UserCheck, ArrowLeft, Loader2 } from 'lucide-react';
+import { QrCode, Shield, Calendar, UserCheck, ArrowLeft, Loader2, ShieldAlert, ExternalLink } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../services/firebase';
@@ -25,38 +26,59 @@ const getCleanImageSrc = (url?: string) => {
 const Badge = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { userProfile } = useAuth();
+  const { userProfile, loading: authLoading } = useAuth();
   
   // Logic to determine which user we are viewing
   const paramUid = searchParams.get('uid');
+  // Use param ID if available, otherwise use logged in ID
   const targetUserId = paramUid || userProfile?.id;
-  const isSelf = !paramUid || paramUid === userProfile?.id;
+  // If param is present, we are viewing someone else (or ourselves via link), so we are in "Viewer Mode" unless IDs match
+  const isSelf = !paramUid || (userProfile && paramUid === userProfile.id);
 
   const [mode, setMode] = useState<'view' | 'scan'>('view');
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   
   // Data State
   const [targetUser, setTargetUser] = useState<User | null>(null);
   const [certifications, setCertifications] = useState<Certification[]>([]);
 
+  // Redirect if no target ID and auth is done loading (guest user visiting /badge without param)
+  useEffect(() => {
+    if (!authLoading && !targetUserId) {
+        navigate('/login');
+    }
+  }, [authLoading, targetUserId, navigate]);
+
   // Fetch Data for the Badge
   useEffect(() => {
     const fetchBadgeData = async () => {
-      if (!targetUserId) return;
+      if (!targetUserId) {
+          setIsLoading(false);
+          return;
+      }
+
       setIsLoading(true);
+      setError(null);
+
       try {
         // 1. Fetch User Profile
-        if (isSelf && userProfile) {
+        // Optimize: If viewing self and profile is already loaded in context, use it.
+        if (isSelf && userProfile && !paramUid) {
             setTargetUser(userProfile);
         } else {
             const userRef = doc(db, 'users', targetUserId);
             const userSnap = await getDoc(userRef);
             if (userSnap.exists()) {
                 setTargetUser({ id: userSnap.id, ...userSnap.data() } as User);
+            } else {
+                setError("El usuario especificado no existe o ha sido eliminado.");
+                return;
             }
         }
 
         // 2. Fetch Progress and Courses to Compute Certifications
+        // Note: This requires Firestore rules to allow read access for the specific user ID or public read
         const [progressSnap, coursesSnap] = await Promise.all([
              getDocs(query(collection(db, 'training_progress'), where('userId', '==', targetUserId))),
              getDocs(collection(db, 'courses'))
@@ -89,20 +111,28 @@ const Badge = () => {
         });
 
         setCertifications(certs);
-      } catch (error) {
+      } catch (error: any) {
          console.error("Error loading badge:", error);
+         if (error.code === 'permission-denied') {
+             setError("No tiene permisos para visualizar esta credencial. Inicie sesión o contacte al administrador.");
+         } else {
+             setError("Error al cargar la información del operario.");
+         }
       } finally {
          setIsLoading(false);
       }
     };
 
     fetchBadgeData();
-  }, [targetUserId, isSelf, userProfile]);
+  }, [targetUserId, isSelf, userProfile, paramUid]);
 
   // Generate a QR that links to this page with the user ID
-  // In a real deployed app, use window.location.origin
-  const qrUrl = `${window.location.origin}${window.location.pathname}#/badge?uid=${targetUserId}`;
-  const QR_DATA_IMG = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(qrUrl)}`;
+  // Fixed: Use window.location.href to ensure correct base URL in all environments, removing any potential duplicate protocols
+  const currentUrl = window.location.href;
+  const baseUrl = currentUrl.split('#')[0]; // Remove hash and params
+  const qrUrl = `${baseUrl}#/badge?uid=${targetUserId}`;
+  
+  const QR_DATA_IMG = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qrUrl)}`;
 
   // Process Avatar URL
   const rawAvatarUrl = targetUser?.photoUrl;
@@ -136,11 +166,31 @@ const Badge = () => {
     );
   }
 
-  if (isLoading) {
+  if (isLoading || authLoading) {
       return (
           <div className="flex justify-center items-center h-64">
               <Loader2 className="animate-spin text-brand-600" size={40} />
           </div>
+      );
+  }
+
+  if (error) {
+      return (
+        <div className="flex flex-col items-center justify-center h-64 text-center px-4 animate-fade-in">
+            <ShieldAlert className="text-red-500 mb-4" size={48} />
+            <h3 className="text-lg font-bold text-slate-800 mb-2">Error de Acceso</h3>
+            <p className="text-slate-500 mb-6 max-w-sm">{error}</p>
+            {!userProfile && (
+                <button onClick={() => navigate('/login')} className="bg-brand-800 text-white px-6 py-2 rounded-lg font-bold shadow-lg hover:bg-brand-900">
+                    Iniciar Sesión
+                </button>
+            )}
+            {userProfile && (
+                <button onClick={() => navigate('/')} className="text-brand-600 font-medium hover:underline">
+                    Volver al Inicio
+                </button>
+            )}
+        </div>
       );
   }
 
@@ -173,7 +223,7 @@ const Badge = () => {
               />
             </div>
             {!isSelf && (
-                <div className="absolute top-2 right-2 bg-yellow-400 text-yellow-900 text-xs font-bold px-2 py-1 rounded shadow">
+                <div className="absolute top-2 right-2 bg-yellow-400 text-yellow-900 text-xs font-bold px-2 py-1 rounded shadow animate-pulse">
                     MODO VISOR
                 </div>
             )}
@@ -189,9 +239,15 @@ const Badge = () => {
               <div className="p-2 bg-white border border-slate-100 rounded-lg shadow-inner">
                 <img src={QR_DATA_IMG} alt="User QR" className="w-48 h-48" />
               </div>
-              <p className="text-[10px] text-slate-400 max-w-[200px] break-all text-center leading-tight opacity-70">
-                 {qrUrl}
-              </p>
+              
+              <div className="mt-2 w-full">
+                 <p className="text-[9px] text-slate-400 font-mono break-all leading-tight bg-slate-50 p-1 rounded border border-slate-100 select-all">
+                    {qrUrl}
+                 </p>
+                 <a href={qrUrl} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-1 text-xs text-brand-600 font-bold mt-1 hover:underline">
+                    <ExternalLink size={10} /> Probar Enlace
+                 </a>
+              </div>
             </div>
             <p className="text-xs text-slate-400 mt-2">
                 {isSelf ? 'Presente este código para validación en campo' : 'Código de validación del operario'}
@@ -210,7 +266,8 @@ const Badge = () => {
           </div>
         </div>
         
-        {isSelf && (
+        {/* Only show "I am Supervisor" button if logged in as the user (looking at own badge) */}
+        {isSelf && userProfile && (
             <button 
             onClick={() => setMode('scan')}
             className="mt-6 flex items-center gap-2 text-slate-600 hover:text-brand-800 font-medium"
